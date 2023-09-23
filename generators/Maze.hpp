@@ -42,7 +42,8 @@ public:
     std::string mazeToString();
     void printSimple();
     void print();
-    void png();
+    void save_maze();
+    void save_solution();
 
 };
 

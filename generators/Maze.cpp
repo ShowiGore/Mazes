@@ -160,11 +160,10 @@ void Maze::print () { std::cout << mazeToString(); }
 
 void Maze::printSimple () { std::cout << mazeToStringSimple(); }
 
-void Maze::png () {
+void Maze::save_maze () {
 
     png::image<png::gray_pixel_1> image(this->width, this->height);
-    png::palette palette = {png::color(0,0,0), png::color(255,255,255)};
-    image.set_palette(palette);
+    image.set_compression_type(png::compression_type_default);
 
     for (png::uint_32 h = 0; h < image.get_height(); ++h) {
         for (png::uint_32 w = 0; w < image.get_width(); ++w) {
@@ -176,7 +175,38 @@ void Maze::png () {
         }
     }
 
-    std::string fileName = std::to_string(this->seed) + "_" + std::to_string(this->height) + "_" + std::to_string(this->width) + ".png";
+    std::string fileName = std::string(getenv("HOME")) + "/Desktop/" + std::to_string(this->seed) + "_" + std::to_string(this->height) + "_" + std::to_string(this->width) + "_maze" + ".png";
+    image.write(fileName);
+
+}
+
+void Maze::save_solution () {
+
+    png::image<png::index_pixel_2> image(this->width, this->height);
+    png::palette palette = {png::color(0,0,0), png::color(255,255,255), png::color(255,0,0), png::color(0,255,0)};  //{black, white, red, green}
+    image.set_palette(palette);
+    image.set_compression_type(png::compression_type_default);
+
+    for (png::uint_32 h = 0; h < image.get_height(); ++h) {
+        for (png::uint_32 w = 0; w < image.get_width(); ++w) {
+
+            if (this->maze[h][w]) { //wall
+                image[h][w] = png::index_pixel_2(0);        //black
+            } else {
+                if (this->solution[h][w]) {
+                    image[h][w] = png::index_pixel_2(3);    //green
+                } else if (this->visited[h][w]) {
+                    image[h][w] = png::index_pixel_2(2);    //red
+                } else { //unvisited path
+                    image[h][w] = png::index_pixel_2(1);    //white
+                }
+
+            }
+
+        }
+    }
+
+    std::string fileName = std::string(getenv("HOME")) + "/Desktop/" + std::to_string(this->seed) + "_" + std::to_string(this->height) + "_" + std::to_string(this->width) + "_solution" + ".png";
     image.write(fileName);
 
 }
