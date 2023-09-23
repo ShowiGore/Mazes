@@ -1,0 +1,8 @@
+#ifndef MAZES_CONSTANTS_HPP
+#define MAZES_CONSTANTS_HPP
+
+const int HEIGHT = 13;//13
+const int WIDTH = 307;//307
+
+
+#endif //MAZES_CONSTANTS_HPP
