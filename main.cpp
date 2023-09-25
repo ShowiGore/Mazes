@@ -7,11 +7,17 @@ int main() {
 
     srand(time(NULL));
 
-    RecursiveDivisionMaze m(HEIGHT, WIDTH);
+    std::cout << "Generating maze" << std::endl;
+    FractalRecursiveDivisionMaze m(HEIGHT, WIDTH, 0);
 
-    m.print();
+    //m.print();
     //m.printSimple();
-    //m.png();
+    std::cout << "Solving maze" << std::endl;
+    m.solve();
+    //m.save_maze();
+
+    std::cout << "Saving solution" << std::endl;
+    m.save_solution();
 
     tp.stop();
     tp.print();
