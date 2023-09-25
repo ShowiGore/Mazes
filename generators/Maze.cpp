@@ -273,7 +273,7 @@ void Maze::solve() { //backtracking
                         }
                         break;
                     case DOWN:
-                        if (current.second < this->height-1 && this->maze[current.first+1][current.second] == PATH && !this->visited[current.first+1][current.second]) {
+                        if (current.first < this->height-1 && this->maze[current.first+1][current.second] == PATH && !this->visited[current.first+1][current.second]) {
                             steps.push(DOWN);
                             current.first = current.first+1;
                             this->visited[current.first][current.second] = true;
@@ -283,7 +283,7 @@ void Maze::solve() { //backtracking
                         }
                         break;
                     case LEFT:
-                        if (current.first > 0 && this->maze[current.first][current.second-1] == PATH && !this->visited[current.first][current.second-1]) {
+                        if (current.second > 0 && this->maze[current.first][current.second-1] == PATH && !this->visited[current.first][current.second-1]) {
                             steps.push(LEFT);
                             current.second = current.second-1;
                             this->visited[current.first][current.second] = true;
