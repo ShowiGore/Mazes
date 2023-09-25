@@ -210,3 +210,117 @@ void Maze::save_solution () {
     image.write(fileName);
 
 }
+
+
+
+void Maze::solve() { //backtracking
+    Direction directions[] = {UP, RIGHT, DOWN, LEFT};
+    std::stack<Direction> steps;
+
+    std::pair <int, int> current = start;
+    this->visited[current.first][current.second] = true;
+
+    int lastStep = -1;
+
+
+    //Search end
+    while (current != this->end && !(lastStep == N_DIRECTIONS-1 && current == this->start)) {
+
+        bool stepped = false;
+        int d = lastStep+1;
+        while (d <= N_DIRECTIONS && !stepped) {
+            if (d == N_DIRECTIONS) { //backtrack
+                lastStep = steps.top();
+                steps.pop();
+                switch (lastStep) {
+                    case UP:
+                        current.first = current.first+1;
+                        //std::cout << "go back DOWN" << std::endl;
+                        break;
+                    case RIGHT:
+                        current.second = current.second-1;
+                        //std::cout << "go back LEFT" << std::endl;
+                        break;
+                    case DOWN:
+                        current.first = current.first-1;
+                        //std::cout << "go back UP" << std::endl;
+                        break;
+                    case LEFT:
+                        current.second = current.second+1;
+                        //std::cout << "go back RIGHT" << std::endl;
+                        break;
+                }
+            } else {
+                switch (directions[d]) {
+                    case UP:
+                        if (current.first > 0 && this->maze[current.first-1][current.second] == PATH && !this->visited[current.first-1][current.second]) {
+                            steps.push(UP);
+                            current.first = current.first-1;
+                            this->visited[current.first][current.second] = true;
+                            lastStep = -1;
+                            stepped = true;
+                            //std::cout << "go UP" << std::endl;
+                        }
+                        break;
+                    case RIGHT:
+                        if (current.second < this->width-1 && this->maze[current.first][current.second+1] == PATH && !this->visited[current.first][current.second+1]) {
+                            steps.push(RIGHT);
+                            current.second = current.second+1;
+                            this->visited[current.first][current.second] = true;
+                            stepped = true;
+                            lastStep = -1;
+                            //std::cout << "go RIGHT" << std::endl;
+                        }
+                        break;
+                    case DOWN:
+                        if (current.second < this->height-1 && this->maze[current.first+1][current.second] == PATH && !this->visited[current.first+1][current.second]) {
+                            steps.push(DOWN);
+                            current.first = current.first+1;
+                            this->visited[current.first][current.second] = true;
+                            stepped = true;
+                            lastStep = -1;
+                            //std::cout << "go DOWN" << std::endl;
+                        }
+                        break;
+                    case LEFT:
+                        if (current.first > 0 && this->maze[current.first][current.second-1] == PATH && !this->visited[current.first][current.second-1]) {
+                            steps.push(LEFT);
+                            current.second = current.second-1;
+                            this->visited[current.first][current.second] = true;
+                            stepped = true;
+                            lastStep = -1;
+                            //std::cout << "go LEFT" << std::endl;
+                        }
+                        break;
+                }
+            }
+            ++d;
+        }
+
+    }
+
+    //Build solution
+    this->solution[current.first][current.second] = true;
+    while (!steps.empty()) {
+        lastStep = steps.top();
+        steps.pop();
+        switch (lastStep) {
+            case UP:
+                current.first = current.first+1;
+                break;
+            case RIGHT:
+                current.second = current.second-1;
+                break;
+            case DOWN:
+                current.first = current.first-1;
+                break;
+            case LEFT:
+                current.second = current.second+1;
+                break;
+        }
+        this->solution[current.first][current.second] = true;
+    }
+
+
+
+}

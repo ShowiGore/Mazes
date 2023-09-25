@@ -2,6 +2,8 @@
 #define MAZES_MAZE_HPP
 
 #include <vector>
+#include <array>
+#include <stack>
 #include <random>
 #include <utility>
 #include <iostream>
@@ -9,6 +11,8 @@
 
 const bool WALL = true;
 const bool PATH = false;
+enum Direction {UP=0, RIGHT=1, DOWN=2, LEFT=3};
+const int N_DIRECTIONS = 4;
 
 class Maze {
 
@@ -44,6 +48,8 @@ public:
     void print();
     void save_maze();
     void save_solution();
+
+    void solve();
 
 };
 
