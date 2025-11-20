@@ -1,5 +1,11 @@
-#include "main.hpp"
+#include <iostream>
+#include <time.h>
 #include <unistd.h>
+#include "constants.hpp"
+#include "utilities/TimeProfiler.hpp"
+#include "generators/Maze.hpp"
+#include "generators/RecursiveDivisionMaze.hpp"
+#include "generators/FractalRecursiveDivisionMaze.hpp"
 
 int main() {
     TimeProfiler tp;
@@ -10,7 +16,7 @@ int main() {
     std::cout << "Generating maze" << std::endl;
     FractalRecursiveDivisionMaze m(HEIGHT, WIDTH, 0);
 
-    //m.print();
+    m.print();
     //m.printSimple();
     std::cout << "Solving maze" << std::endl;
     m.solve();

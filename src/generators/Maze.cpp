@@ -1,4 +1,6 @@
 #include "Maze.hpp"
+#include <filesystem>
+#include <format>
 
 int Maze::randomInRange (int min, int max) {
     return min + (rand() % (max-min+1));
@@ -175,8 +177,11 @@ void Maze::save_maze () {
         }
     }
 
-    std::string fileName = std::string(getenv("HOME")) + "/Desktop/" + std::to_string(this->seed) + "_" + std::to_string(this->height) + "_" + std::to_string(this->width) + "_maze" + ".png";
-    image.write(fileName);
+    const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+    std::filesystem::create_directories(dir);
+    const std::string fullPath = (dir / std::format("{}_{}_{}_maze.png", seed, height, width)).string();
+
+    image.write(fullPath);
 
 }
 
@@ -206,8 +211,10 @@ void Maze::save_solution () {
         }
     }
 
-    std::string fileName = std::string(getenv("HOME")) + "/Desktop/" + std::to_string(this->seed) + "_" + std::to_string(this->height) + "_" + std::to_string(this->width) + "_solution" + ".png";
-    image.write(fileName);
+    const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+    std::filesystem::create_directories(dir);
+    const std::string fullPath = (dir / std::format("{}_{}_{}_solution.png", seed, height, width)).string();
+    image.write(fullPath);
 
 }
 

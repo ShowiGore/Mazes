@@ -7,7 +7,7 @@
 #include <random>
 #include <utility>
 #include <iostream>
-#include <png++/png.hpp>
+#include <png.hpp>
 
 const bool WALL = true;
 const bool PATH = false;
