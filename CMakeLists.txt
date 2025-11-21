@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 
 add_compile_definitions(PROJECT_ROOT_DIR="${CMAKE_SOURCE_DIR}")
 
+
 # Find the underlying C library (required by png++)
 find_package(PNG REQUIRED)
 

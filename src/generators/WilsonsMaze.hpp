@@ -1,27 +1,23 @@
-    #ifndef MAZES_WILSONNMAZE_HPP
-#define MAZES_WILSONNMAZE_HPP
+    #ifndef MAZES_WILSONSMAZE_HPP
+#define MAZES_WILSONSMAZE_HPP
 
 #include "Maze.hpp"
 
-class WilsonMaze : public Maze {
+class WilsonsMaze : public Maze {
 
-protected:
+    private:
+        enum WalkDirections { UP = 0, RIGHT = 1, DOWN = 2, LEFT = 3 };
+        std::vector<std::vector<WalkDirections>> walk_grid;
 
-    void init();
-    void generate() override;
+        void init();
+        void generate() override;
+        void loopErasedRandomWalk(int start_row, int start_column);
 
-    void buildVertical (int w, int minH, int maxH);
-    void buildHorizontal (int h, int minW, int maxW);
-    void recursiveDivisionVertical (int minHeight, int maxHeight, int minWidth, int maxWidth);
-    void recursiveDivisionHorizontal (int minHeight, int maxHeight, int minWidth, int maxWidth);
-    void recursiveDivisionRecursive (int minHeight, int maxHeight, int minWidth, int maxWidth);
-
-public:
-
-    WilsonMaze(int height, int width, unsigned int seed);
-    WilsonMaze(int height, int width);
+    public:
+        WilsonsMaze(int height, int width, unsigned int seed);
+        WilsonsMaze(int height, int width);
 
 };
 
 
-#endif //MAZES_WILSONNMAZE_HPP
+#endif //MAZES_WILSONSMAZE_HPP
