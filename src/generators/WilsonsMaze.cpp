@@ -21,11 +21,14 @@ void WilsonsMaze::init () {
         }
     }
 
+    walk_grid.assign(height / 2, std::vector<WalkDirections>(width / 2, UP));
+
 }
 
 void WilsonsMaze::generate() {
 
-    std::vector<std::pair<int, int>> cells((height / 2) * (width / 2)); //valid cell coordinates
+    std::vector<std::pair<int, int>> cells; //valid cell coordinates
+    cells.reserve((height / 2) * (width / 2));
     for (int h = 1; h < height; h += 2) {
         for (int w = 1; w < width; w += 2) {
             cells.emplace_back(h, w);
@@ -48,70 +51,66 @@ void WilsonsMaze::generate() {
 
 }
 
-void WilsonsMaze::loopErasedRandomWalk(int startR, int startC) {
-    int currR = startR;
-    int currC = startC;
+void WilsonsMaze::loopErasedRandomWalk(const int start_row, const int start_column) {
+    int current_row = start_row;
+    int current_column = start_column;
 
-    // Deltas for UP, RIGHT, DOWN, LEFT
-    const int dr[] = {-1, 0, 1, 0}; // Standard step (1 unit) - wait, grid logic needs step of 2?
-    // In grid mazes, neighbors are usually 2 units away (jumping over the wall).
-    // But strict Wilson's walks on the graph nodes.
-    // Let's assume we move 2 units in the array to reach the next "cell".
-    const int step = 2;
-    const int dRow[] = {-step, 0, step, 0};
-    const int dCol[] = {0, step, 0, -step};
+    // Used to jump between nodes (distance 2)
+    constexpr int d_row_cell[] = {-2, 0, 2, 0};
+    constexpr int d_col_cell[] = {0, 2, 0, -2};
 
-    // --- Phase 1: The Random Walk ---
-    // Walk until we hit a cell that is already part of the maze (PATH).
-    while (maze[currR][currC] == WALL) {
+    // Random Walk
+    while (maze[current_row][current_column] == WALL) {
 
-        // Pick a random valid direction
-        std::vector<int> validDirs;
+        std::vector<WalkDirections> valid_dirs;
+        valid_dirs.reserve(4);
+
         for (int i = 0; i < 4; ++i) {
-            int nr = currR + dRow[i];
-            int nc = currC + dCol[i];
-            // Check bounds (assuming valid cells are within [1, height-2])
+            // Check neighbors using the cell step (2)
+            const int nr = current_row + d_row_cell[i];
+            const int nc = current_column + d_col_cell[i];
+
             if (nr > 0 && nr < height - 1 && nc > 0 && nc < width - 1) {
-                validDirs.push_back(i);
+                valid_dirs.push_back(static_cast<WalkDirections>(i));
             }
         }
 
-        if (!validDirs.empty()) {
-            // Pick random direction
-            int randIndex = randomInRange(0, validDirs.size() - 1);
-            int dir = validDirs[randIndex];
+        if (!valid_dirs.empty()) {
+            const int rand_index = randomInRange(0, valid_dirs.size() - 1);
+            const WalkDirections dir = valid_dirs[rand_index];
 
-            // **Crucial**: We store the direction at the current cell.
-            // If we revisit this cell later in the same walk (creating a loop),
-            // this value gets overwritten, effectively cutting off the loop.
-            walkGrid[currR][currC] = dir;
+            // Store direction in the reduced grid
+            walk_grid[current_row / 2][current_column / 2] = dir;
 
             // Move to next cell
-            currR += dRow[dir];
-            currC += dCol[dir];
+            current_row += d_row_cell[dir];
+            current_column += d_col_cell[dir];
         }
     }
 
-    // --- Phase 2: Retrace and Carve ---
-    // We reached the maze. Now restart from the beginning and follow the arrows.
-    currR = startR;
-    currC = startC;
+    //Retrace and carve
+    current_row = start_row;
+    current_column = start_column;
 
-    while (maze[currR][currC] == WALL) {
-        int dir = walkGrid[currR][currC];
+    while (maze[current_row][current_column] == WALL) {
 
-        // 1. Mark current cell as PATH
-        maze[currR][currC] = PATH;
+        // Used to find the wall between nodes (distance 1)
+        constexpr int d_col_wall[] = {0, 1, 0, -1};
+        constexpr int d_row_wall[] = {-1, 0, 1, 0};
 
-        // 2. Carve the wall between current and next
-        // The wall is at current + (delta / 2)
-        int wallR = currR + (dRow[dir] / 2);
-        int wallC = currC + (dCol[dir] / 2);
-        maze[wallR][wallC] = PATH;
+        const WalkDirections dir = walk_grid[current_row / 2][current_column / 2];
 
-        // 3. Move to next cell
-        currR += dRow[dir];
-        currC += dCol[dir];
+        // Mark current node
+        maze[current_row][current_column] = PATH;
+
+        // Carve intermediate wall
+        const int wall_r = current_row + d_row_wall[dir];
+        const int wall_c = current_column + d_col_wall[dir];
+        maze[wall_r][wall_c] = PATH;
+
+        // Move to next node
+        current_row += d_row_cell[dir];
+        current_column += d_col_cell[dir];
     }
 }
 

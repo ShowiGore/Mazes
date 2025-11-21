@@ -9,10 +9,11 @@
 #include <iostream>
 #include <png.hpp>
 
-const bool WALL = true;
-const bool PATH = false;
+constexpr bool WALL = true;
+constexpr bool PATH = false;
 enum Direction {UP=0, RIGHT=1, DOWN=2, LEFT=3};
-const int N_DIRECTIONS = 4;
+
+constexpr int N_DIRECTIONS = 4;
 
 class Maze {
 
@@ -29,9 +30,9 @@ protected:
     std::mt19937 re{};
     std::bernoulli_distribution bd;
 
-    int randomInRange (int min, int max);
-    int randomEven (int min, int max);
-    int randomOdd (int min, int max);
+    static int randomInRange (int min, int max);
+    static int randomEven (int min, int max);
+    static int randomOdd (int min, int max);
     void init();
     void buildStartEnd();
     virtual void generate() {};

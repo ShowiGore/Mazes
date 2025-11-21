@@ -6,17 +6,23 @@
 #include "generators/Maze.hpp"
 #include "generators/RecursiveDivisionMaze.hpp"
 #include "generators/FractalRecursiveDivisionMaze.hpp"
+#include "generators/WilsonsMaze.hpp"
 
 int main() {
     TimeProfiler tp;
     tp.start();
 
-    srand(time(NULL));
+    std::random_device rd;
+    const unsigned int seed = rd();
+    //constexpr unsigned int seed = 0;
 
     std::cout << "Generating maze" << std::endl;
-    FractalRecursiveDivisionMaze m(HEIGHT, WIDTH, 0);
+    WilsonsMaze m(HEIGHT, WIDTH, seed);
 
-    m.print();
+    //std::cout << "Saving maze" << std::endl;
+    //m.save_maze();
+
+    //m.print();
     //m.printSimple();
     std::cout << "Solving maze" << std::endl;
     m.solve();

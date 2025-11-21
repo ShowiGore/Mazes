@@ -35,50 +35,33 @@ void Maze::init() {
 
 void Maze::buildStartEnd() {
 
+    std::vector<std::pair<int, int>> perimeter;
+    perimeter.reserve(2 * (width / 2) + 2 * (height / 2));
 
-    switch(randomInRange(0,3)) {
-        case 0://north
-            start.first = 0;
-            start.second = randomOdd(0,width-1);
-            break;
-        case 1://east
-            start.first = randomOdd(0,height-1);
-            start.second = width-1;
-            break;
-        case 2://south
-            start.first = height-1;
-            start.second = randomOdd(0,width-1);
-            break;
-        case 3://west
-            start.first = randomOdd(0,height-1);
-            start.second = 0;
-            break;
+    for (int w = 1; w < width - 1; w += 2) {
+        perimeter.emplace_back(0, w);          // North
+        perimeter.emplace_back(height - 1, w); // South
     }
+    for (int h = 1; h < height - 1; h += 2) {
+        perimeter.emplace_back(h, 0);         // West
+        perimeter.emplace_back(h, width - 1); // East
+    }
+
+    if (perimeter.size() < 2) return; // Small mazes
+
+    const int size = static_cast<int>(perimeter.size());
+    const int idx1 = randomInRange(0, size - 1);
+    int idx2 = randomInRange(0, size - 2);
+    if (idx2 >= idx1) idx2++;
+
+    start = perimeter[idx1];
     maze[start.first][start.second] = PATH;
-
-    switch(randomInRange(0,3)) {
-        case 0://north
-            end.first = 0;
-            end.second = randomOdd(0,width-1);
-            break;
-        case 1://east
-            end.first = randomOdd(0,height-1);
-            end.second = width-1;
-            break;
-        case 2://south
-            end.first = height-1;
-            end.second = randomOdd(0,width-1);
-            break;
-        case 3://west
-            end.first = randomOdd(0,height-1);
-            end.second = 0;
-            break;
-    }
+    end = perimeter[idx2];
     maze[end.first][end.second] = PATH;
 
 }
 
-Maze::Maze(int height, int width, unsigned int seed) {
+Maze::Maze(const int height, const int width, const unsigned int seed) {
 
     this->height = (height < 3) ? (3) : ((height & 1) ? height : (height+1));
     this->width = (width < 3) ? (3) : ((width & 1) ? width : (width+1));
@@ -93,9 +76,9 @@ Maze::Maze(int height, int width, unsigned int seed) {
     std::cout << seed << "[" << this->height << "]" << "[" << this->width << "]" << std::endl;
 }
 
-Maze::Maze(int height, int width) {
+Maze::Maze(const int height, const int width) {
 
-    unsigned int seed = rd();
+    const unsigned int seed = rd();
 
     this->height = (height < 3) ? (3) : ((height & 1) ? height : (height+1));
     this->width = (width < 3) ? (3) : ((width & 1) ? width : (width+1));
@@ -120,19 +103,17 @@ bool Maze::get(int h, int w) {
 }
 
 std::string Maze::mazeToString() {
-
-    std::string cell[2][2][2][2][2] = {{{{{"\u001b[30m┼\u001b[0m","\u001b[30m├\u001b[0m"},{"\u001b[30m┴\u001b[0m","\u001b[30m└\u001b[0m"}},{{"\u001b[30m┤\u001b[0m","\u001b[30m│\u001b[0m"},{"\u001b[30m┘\u001b[0m","\u001b[30m╵\u001b[0m"}}},{{{"\u001b[30m┬\u001b[0m","\u001b[30m┌\u001b[0m"},{"\u001b[30m─\u001b[0m","\u001b[30m╶\u001b[0m"}},{{"\u001b[30m┐\u001b[0m","\u001b[30m╷\u001b[0m"},{"\u001b[30m╴\u001b[0m","\u001b[30m·\u001b[0m"}}}},{{{{"\u001b[37m·\u001b[0m","\u001b[37m╴\u001b[0m"},{"\u001b[37m╷\u001b[0m","\u001b[37m┐\u001b[0m"}},{{"\u001b[37m╶\u001b[0m","\u001b[37m─\u001b[0m"},{"\u001b[37m┌\u001b[0m","\u001b[37m┬\u001b[0m"}}},{{{"\u001b[37m╵\u001b[0m","\u001b[37m┘\u001b[0m"},{"\u001b[37m│\u001b[0m","\u001b[37m┤\u001b[0m"}},{{"\u001b[37m└\u001b[0m","\u001b[37m┴\u001b[0m"},{"\u001b[37m├\u001b[0m","\u001b[37m┼\u001b[0m"}}}}};
-    bool C, N, E, S, W;
-    std::string s = "";
+    std::string s;
 
     for (int h = 0; h < height; ++h) {
         for (int w = 0; w < width; ++w) {
+            const std::string cell[2][2][2][2][2] = {{{{{"\u001b[30m┼\u001b[0m","\u001b[30m├\u001b[0m"},{"\u001b[30m┴\u001b[0m","\u001b[30m└\u001b[0m"}},{{"\u001b[30m┤\u001b[0m","\u001b[30m│\u001b[0m"},{"\u001b[30m┘\u001b[0m","\u001b[30m╵\u001b[0m"}}},{{{"\u001b[30m┬\u001b[0m","\u001b[30m┌\u001b[0m"},{"\u001b[30m─\u001b[0m","\u001b[30m╶\u001b[0m"}},{{"\u001b[30m┐\u001b[0m","\u001b[30m╷\u001b[0m"},{"\u001b[30m╴\u001b[0m","\u001b[30m·\u001b[0m"}}}},{{{{"\u001b[37m·\u001b[0m","\u001b[37m╴\u001b[0m"},{"\u001b[37m╷\u001b[0m","\u001b[37m┐\u001b[0m"}},{{"\u001b[37m╶\u001b[0m","\u001b[37m─\u001b[0m"},{"\u001b[37m┌\u001b[0m","\u001b[37m┬\u001b[0m"}}},{{{"\u001b[37m╵\u001b[0m","\u001b[37m┘\u001b[0m"},{"\u001b[37m│\u001b[0m","\u001b[37m┤\u001b[0m"}},{{"\u001b[37m└\u001b[0m","\u001b[37m┴\u001b[0m"},{"\u001b[37m├\u001b[0m","\u001b[37m┼\u001b[0m"}}}}};
 
-            C = maze[h][w];
-            N = (h == 0) ? PATH : maze[h - 1][w];
-            E = (w == width - 1) ? PATH : maze[h][w + 1];
-            S = (h == height - 1) ? PATH : maze[h + 1][w];
-            W = (w == 0) ? PATH : maze[h][w - 1];
+            const bool C = maze[h][w];
+            const bool N = (h == 0) ? PATH : maze[h - 1][w];
+            const bool E = (w == width - 1) ? PATH : maze[h][w + 1];
+            const bool S = (h == height - 1) ? PATH : maze[h + 1][w];
+            const bool W = (w == 0) ? PATH : maze[h][w - 1];
 
             s.append(cell[C][N][E][S][W]);
         }
@@ -142,7 +123,7 @@ std::string Maze::mazeToString() {
 }
 
 std::string Maze::mazeToStringSimple() {
-    std::string s = "";
+    std::string s;
 
     for (int h = 0; h < height; ++h) {
         for (int w = 0; w < width; ++w) {
@@ -188,7 +169,7 @@ void Maze::save_maze () {
 void Maze::save_solution () {
 
     png::image<png::index_pixel_2> image(this->width, this->height);
-    png::palette palette = {png::color(0,0,0), png::color(255,255,255), png::color(255,0,0), png::color(0,255,0)};  //{black, white, red, green}
+    const png::palette palette = {png::color(0,0,0), png::color(255,255,255), png::color(255,0,0), png::color(0,255,0)};  //{black, white, red, green}
     image.set_palette(palette);
     image.set_compression_type(png::compression_type_default);
 
@@ -221,7 +202,7 @@ void Maze::save_solution () {
 
 
 void Maze::solve() { //backtracking
-    Direction directions[] = {UP, RIGHT, DOWN, LEFT};
+    constexpr Direction directions[] = {UP, RIGHT, DOWN, LEFT};
     std::stack<Direction> steps;
 
     std::pair <int, int> current = start;
