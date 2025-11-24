@@ -6,11 +6,11 @@
 class WilsonsMaze : public Maze {
 
     private:
-        enum WalkDirections { UP = 0, RIGHT = 1, DOWN = 2, LEFT = 3 };
-        std::vector<std::vector<WalkDirections>> walk_grid;
+        std::vector<std::vector<Direction>> walk_grid;
 
-        void init();
+        void init() override;
         void generate() override;
+        void loop_erased_random_walk_initial(int start_row, int start_column);
         void loopErasedRandomWalk(int start_row, int start_column);
 
     public:
