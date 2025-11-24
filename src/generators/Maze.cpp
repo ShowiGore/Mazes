@@ -35,7 +35,14 @@ void Maze::init() {
 
 void Maze::buildStartEnd() {
 
-    std::vector<std::pair<int, int>> perimeter;
+    start.first = 0;
+    start.second = randomOdd(1, width - 2);
+    maze[start.first][start.second] = PATH;
+    end.first = height - 1;
+    end.second = randomOdd(1, width - 2);
+    maze[end.first][end.second] = PATH;
+
+    /*std::vector<std::pair<int, int>> perimeter;
     perimeter.reserve(2 * (width / 2) + 2 * (height / 2));
 
     for (int w = 1; w < width - 1; w += 2) {
@@ -57,7 +64,7 @@ void Maze::buildStartEnd() {
     start = perimeter[idx1];
     maze[start.first][start.second] = PATH;
     end = perimeter[idx2];
-    maze[end.first][end.second] = PATH;
+    maze[end.first][end.second] = PATH;*/
 
 }
 

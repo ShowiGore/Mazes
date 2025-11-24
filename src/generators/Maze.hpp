@@ -33,12 +33,13 @@ protected:
     static int randomInRange (int min, int max);
     static int randomEven (int min, int max);
     static int randomOdd (int min, int max);
-    void init();
+    virtual void init();
     void buildStartEnd();
     virtual void generate() {};
 
 public:
 
+    virtual ~Maze() = default;
     Maze(int height, int width, unsigned int seed);
     Maze(int height, int width);
     void set(int h, int w, bool b);
@@ -49,7 +50,6 @@ public:
     void print();
     void save_maze();
     void save_solution();
-
     void solve();
 
 };
