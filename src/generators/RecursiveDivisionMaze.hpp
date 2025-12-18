@@ -7,7 +7,7 @@ class RecursiveDivisionMaze : public Maze {
 
 protected:
 
-    void init();
+    void init() override;
     void generate() override;
 
     void buildVertical (int w, int minH, int maxH);

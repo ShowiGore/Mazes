@@ -1,15 +1,15 @@
 #include <iostream>
-#include <time.h>
 #include <unistd.h>
 #include "utilities/TimeProfiler.hpp"
 #include "generators/Maze.hpp"
 #include "generators/RecursiveDivisionMaze.hpp"
 #include "generators/FractalRecursiveDivisionMaze.hpp"
 #include "generators/WilsonsMaze.hpp"
+#include "solvers/RecursiveSolver.hpp"
 
 int main() {
-    constexpr int HEIGHT = 12345; //524288
-    constexpr int WIDTH = 12345; //524288
+    constexpr int HEIGHT = 19; //524288
+    constexpr int WIDTH = 19; //524288
     //std::random_device rd;
     //const unsigned int seed = rd();
     constexpr unsigned int seed = 0;
@@ -19,24 +19,29 @@ int main() {
     std::cout << "Generating maze" << std::endl;
 
     tp.start();
-    WilsonsMaze m(HEIGHT, WIDTH, seed);
+    WilsonsMaze maze(HEIGHT, WIDTH, seed);
     tp.stop();
     tp.print();
 
-    //m.print();
-    //m.printSimple();
+    //maze.print();
+    //maze.printSimple();
     std::cout << "Saving maze" << std::endl;
-    m.save_maze();
+    maze.save_maze();
+
+    RecursiveSolver solver; // Instancia del solver
 
     std::cout << "Solving maze" << std::endl;
     tp.start();
-    m.solve();
+    const bool solvable = solver.solve(maze);
     tp.stop();
     tp.print();
-    //m.save_maze();
 
-    std::cout << "Saving solution" << std::endl;
-    m.save_solution();
+    if (solvable) {
+        std::cout << "Saving solution" << std::endl;
+        solver.save_solution(maze);
+    } else {
+        std::cout << "Failed to solve the maze" << std::endl;
+    }
 
     return 0;
 }

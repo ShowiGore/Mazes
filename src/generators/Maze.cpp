@@ -2,7 +2,31 @@
 #include <filesystem>
 #include <format>
 
-int Maze::randomInRange (int min, int max) {
+int Maze::getSeed() const {
+    return this->seed;
+}
+
+int Maze::getHeight() const {
+    return this->height;
+}
+
+int Maze::getWidth() const {
+    return this->width;
+}
+
+std::pair<int,int> Maze::getStart() const {
+    return this->start;
+}
+
+std::pair<int,int> Maze::getEnd() const {
+    return this->end;
+}
+
+std::vector<std::vector<bool>> Maze::getMaze() const {
+    return this->maze;
+}
+
+int Maze::randomInRange (const int min, const int max) {
     return min + (rand() % (max-min+1));
 }
 
@@ -77,8 +101,8 @@ Maze::Maze(const int height, const int width, const unsigned int seed) {
     srand(seed);
 
     this->maze.resize(this->height, std::vector<bool>(this->width));
-    this->visited.resize(this->height, std::vector<bool>(this->width));
-    this->solution.resize(this->height, std::vector<bool>(this->width));
+    //this->visited.resize(this->height, std::vector<bool>(this->width));
+    //this->solution.resize(this->height, std::vector<bool>(this->width));
 
     std::cout << seed << "[" << this->height << "]" << "[" << this->width << "]" << std::endl;
 }
@@ -94,22 +118,22 @@ Maze::Maze(const int height, const int width) {
     srand(seed);
 
     this->maze.resize(this->height, std::vector<bool>(this->width));
-    this->visited.resize(this->height, std::vector<bool>(this->width));
-    this->solution.resize(this->height, std::vector<bool>(this->width));
+    //this->visited.resize(this->height, std::vector<bool>(this->width));
+    //this->solution.resize(this->height, std::vector<bool>(this->width));
 
     std::cout << seed << "[" << this->height << "]" << "[" << this->width << "]" << std::endl;
 
 }
 
-void Maze::set(int h, int w, bool b) {
+void Maze::set(const int h, const int w, const bool b) {
     maze[h][w] = b;
 }
 
-bool Maze::get(int h, int w) {
+bool Maze::get(const int h, const int w) const {
     return maze[h][w];
 }
 
-std::string Maze::mazeToString() {
+std::string Maze::mazeToString() const {
     std::string s;
 
     for (int h = 0; h < height; ++h) {
@@ -129,7 +153,7 @@ std::string Maze::mazeToString() {
     return s;
 }
 
-std::string Maze::mazeToStringSimple() {
+std::string Maze::mazeToStringSimple() const {
     std::string s;
 
     for (int h = 0; h < height; ++h) {
@@ -146,9 +170,9 @@ std::string Maze::mazeToStringSimple() {
     return s;
 }
 
-void Maze::print () { std::cout << mazeToString(); }
+void Maze::print () const { std::cout << mazeToString(); }
 
-void Maze::printSimple () { std::cout << mazeToStringSimple(); }
+void Maze::printSimple () const { std::cout << mazeToStringSimple(); }
 
 void Maze::save_maze () {
 
@@ -173,42 +197,9 @@ void Maze::save_maze () {
 
 }
 
-void Maze::save_solution () {
-
-    png::image<png::index_pixel_2> image(this->width, this->height);
-    const png::palette palette = {png::color(0,0,0), png::color(255,255,255), png::color(255,0,0), png::color(0,255,0)};  //{black, white, red, green}
-    image.set_palette(palette);
-    image.set_compression_type(png::compression_type_default);
-
-    for (png::uint_32 h = 0; h < image.get_height(); ++h) {
-        for (png::uint_32 w = 0; w < image.get_width(); ++w) {
-
-            if (this->maze[h][w]) { //wall
-                image[h][w] = png::index_pixel_2(0);        //black
-            } else {
-                if (this->solution[h][w]) {
-                    image[h][w] = png::index_pixel_2(3);    //green
-                } else if (this->visited[h][w]) {
-                    image[h][w] = png::index_pixel_2(2);    //red
-                } else { //unvisited path
-                    image[h][w] = png::index_pixel_2(1);    //white
-                }
-
-            }
-
-        }
-    }
-
-    const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
-    std::filesystem::create_directories(dir);
-    const std::string fullPath = (dir / std::format("{}_{}_{}_solution.png", seed, height, width)).string();
-    image.write(fullPath);
-
-}
 
 
-
-void Maze::solve() { //backtracking
+/*void Maze::solve() { //backtracking
     constexpr Direction directions[] = {UP, RIGHT, DOWN, LEFT};
     std::stack<Direction> steps;
 
@@ -318,4 +309,4 @@ void Maze::solve() { //backtracking
 
 
 
-}
+}*/

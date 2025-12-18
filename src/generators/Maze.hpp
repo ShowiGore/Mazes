@@ -18,10 +18,7 @@ constexpr int N_DIRECTIONS = 4;
 class Maze {
 
 protected:
-
     std::vector<std::vector<bool>> maze;
-    std::vector<std::vector<bool>> visited;
-    std::vector<std::vector<bool>> solution;
     std::pair <int, int> start, end;
     int height, width;
     unsigned int seed;
@@ -42,15 +39,24 @@ public:
     virtual ~Maze() = default;
     Maze(int height, int width, unsigned int seed);
     Maze(int height, int width);
+
+    [[nodiscard]] int getSeed() const;
+    [[nodiscard]] int getHeight() const;
+    [[nodiscard]] int getWidth() const;
+    [[nodiscard]] std::pair<int,int> getStart() const;
+    [[nodiscard]] std::pair<int,int> getEnd() const;
+    [[nodiscard]] std::vector<std::vector<bool>> getMaze() const;
+
     void set(int h, int w, bool b);
-    bool get(int h, int w);
-    std::string mazeToStringSimple();
-    std::string mazeToString();
-    void printSimple();
-    void print();
+    [[nodiscard]] bool get(int h, int w) const;
+    [[nodiscard]] std::string mazeToStringSimple() const;
+    [[nodiscard]] std::string mazeToString() const;
+    void printSimple() const;
+    void print() const;
     void save_maze();
-    void save_solution();
-    void solve();
+    //void solve();
+
+
 
 };
 

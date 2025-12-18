@@ -1,15 +1,15 @@
 #include "RecursiveDivisionMaze.hpp"
 
 
-RecursiveDivisionMaze::RecursiveDivisionMaze(int height, int width, unsigned int seed) : Maze(height, width, seed) {
-    init();
-    generate();
+RecursiveDivisionMaze::RecursiveDivisionMaze(const int height, const int width, const unsigned int seed) : Maze(height, width, seed) {
+    RecursiveDivisionMaze::init();
+    RecursiveDivisionMaze::generate();
     buildStartEnd();
 }
 
-RecursiveDivisionMaze::RecursiveDivisionMaze(int height, int width) : Maze(height, width) {
-    init();
-    generate();
+RecursiveDivisionMaze::RecursiveDivisionMaze(const int height, const int width) : Maze(height, width) {
+    RecursiveDivisionMaze::init();
+    RecursiveDivisionMaze::generate();
     buildStartEnd();
 }
 
@@ -27,7 +27,7 @@ void RecursiveDivisionMaze::init () {
 
 }
 
-void RecursiveDivisionMaze::buildVertical (int w, int minH, int maxH) {
+void RecursiveDivisionMaze::buildVertical (const int w, const int minH, const int maxH) {
     if (w%2 != 0) {
         std::cout << "Error at biuldVertical()" << std::endl;
     } else {
@@ -38,7 +38,7 @@ void RecursiveDivisionMaze::buildVertical (int w, int minH, int maxH) {
 
 }
 
-void RecursiveDivisionMaze::buildHorizontal (int h, int minW, int maxW) {
+void RecursiveDivisionMaze::buildHorizontal (const int h, const int minW, const int maxW) {
     if (h%2 != 0) {
         std::cout << "Error at biuldHorizontal()" << std::endl;
     } else {
@@ -48,14 +48,12 @@ void RecursiveDivisionMaze::buildHorizontal (int h, int minW, int maxW) {
     }
 }
 
-void RecursiveDivisionMaze::recursiveDivisionVertical (int minHeight, int maxHeight, int minWidth, int maxWidth) {
-    int h = (maxHeight-minHeight)+1;
-    int w = (maxWidth-minWidth)+1;
+void RecursiveDivisionMaze::recursiveDivisionVertical (const int minHeight, const int maxHeight, const int minWidth, const int maxWidth) {
 
-    if (h>3 && w>3) {
+    if (((maxHeight-minHeight)+1)>3 && ((maxWidth-minWidth)+1)>3) {
 
-        int row = randomOdd(minHeight+1, maxHeight-1);
-        int column = randomEven(minWidth+1, maxWidth-1);
+        const int row = randomOdd(minHeight+1, maxHeight-1);
+        const int column = randomEven(minWidth+1, maxWidth-1);
 
         buildVertical(column, minHeight+1, maxHeight-1);
         maze[row][column] = PATH;
@@ -65,13 +63,13 @@ void RecursiveDivisionMaze::recursiveDivisionVertical (int minHeight, int maxHei
     }
 }
 
-void RecursiveDivisionMaze::recursiveDivisionHorizontal (int minHeight, int maxHeight, int minWidth, int maxWidth) {
-    int h = (maxHeight - minHeight) + 1;
-    int w = (maxWidth - minWidth) + 1;
+void RecursiveDivisionMaze::recursiveDivisionHorizontal (const int minHeight, const int maxHeight, const int minWidth, const int maxWidth) {
+    const int h = (maxHeight - minHeight) + 1;
+    const int w = (maxWidth - minWidth) + 1;
 
     if (h > 3 && w > 3) {
-        int row = randomEven(minHeight + 1, maxHeight - 1);
-        int column = randomOdd(minWidth + 1, maxWidth - 1);
+        const int row = randomEven(minHeight + 1, maxHeight - 1);
+        const int column = randomOdd(minWidth + 1, maxWidth - 1);
 
         buildHorizontal(row, minWidth + 1, maxWidth - 1);
         maze[row][column] = PATH;
@@ -82,10 +80,10 @@ void RecursiveDivisionMaze::recursiveDivisionHorizontal (int minHeight, int maxH
     }
 }
 
-void RecursiveDivisionMaze::recursiveDivisionRecursive (int minHeight, int maxHeight, int minWidth, int maxWidth) {
+void RecursiveDivisionMaze::recursiveDivisionRecursive (const int minHeight, const int maxHeight, const int minWidth, const int maxWidth) {
 
-    int h = (maxHeight - minHeight) + 1;
-    int w = (maxWidth - minWidth) + 1;
+    const int h = (maxHeight - minHeight) + 1;
+    const int w = (maxWidth - minWidth) + 1;
 
     if (w < h) {
         recursiveDivisionHorizontal(minHeight, maxHeight, minWidth, maxWidth);
