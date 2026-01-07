@@ -6,10 +6,11 @@
 #include "generators/FractalRecursiveDivisionMaze.hpp"
 #include "generators/WilsonsMaze.hpp"
 #include "solvers/RecursiveSolver.hpp"
+#include "solvers/AStarSolver.hpp"
 
 int main() {
-    constexpr int HEIGHT = 19; //524288
-    constexpr int WIDTH = 19; //524288
+    constexpr int HEIGHT = 12345; //524288
+    constexpr int WIDTH = 12345; //524288
     //std::random_device rd;
     //const unsigned int seed = rd();
     constexpr unsigned int seed = 0;
@@ -28,7 +29,7 @@ int main() {
     std::cout << "Saving maze" << std::endl;
     maze.save_maze();
 
-    RecursiveSolver solver; // Instancia del solver
+    AStarSolver solver; // Instancia del solver
 
     std::cout << "Solving maze" << std::endl;
     tp.start();
