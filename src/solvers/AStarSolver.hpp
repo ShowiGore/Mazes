@@ -6,9 +6,17 @@
 
 class AStarSolver : public Solver {
 
+private:
+    int heuristic_weight = 1;
+
+    template <bool IsWeighted>
+    bool solve_impl(const Maze &maze_object);
+
 public:
 
     bool solve(const Maze &maze) override;
+
+    void setHeuristicWeight(const int weight) { heuristic_weight = weight; }
 
 };
 

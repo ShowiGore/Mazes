@@ -18,7 +18,8 @@ inline static int heuristic(const int r, const int c, const int endR, const int 
     return std::abs(r - endR) + std::abs(c - endC);
 }
 
-bool AStarSolver::solve(const Maze &maze_object) { // A*
+template <bool IsWeighted>
+bool AStarSolver::solve_impl(const Maze &maze_object) { // A*
     this->height = maze_object.getHeight();
     this->width = maze_object.getWidth();
     this->start = maze_object.getStart();
@@ -41,8 +42,15 @@ bool AStarSolver::solve(const Maze &maze_object) { // A*
     std::priority_queue<AStarNode, std::vector<AStarNode>, std::greater<AStarNode>> open_set;
 
     // Initialize start node
+    const int start_h = heuristic(start.first, start.second, end.first, end.second);
+    int start_f;
+    if constexpr (IsWeighted) { // Apply weight to initial node too for consistency
+        start_f = start_h * heuristic_weight;
+    } else {
+        start_f = start_h;
+    }
+    open_set.push({start.first, start.second, start_f});
     g_score[start.first][start.second] = 0;
-    open_set.push({start.first, start.second, heuristic(start.first, start.second, end.first, end.second)});
 
     // Standard directions deltas: UP, RIGHT, DOWN, LEFT
 
@@ -62,8 +70,16 @@ bool AStarSolver::solve(const Maze &maze_object) { // A*
             return true;
         }
 
-        // Skip if we found a better path to this node already (Lazy Deletion)
-        if (f_score > g_score[r][c] + heuristic(r, c, end.first, end.second)) {
+
+        const int current_h = heuristic(r, c, end.first, end.second);
+        int current_g;
+        if constexpr (IsWeighted) {
+            current_g = f_score - (current_h * heuristic_weight);
+        } else {
+            current_g = f_score - current_h;
+        }
+
+        if (current_g > g_score[r][c]) { // Skip if we already found a better path to this node
             continue;
         }
 
@@ -84,7 +100,15 @@ bool AStarSolver::solve(const Maze &maze_object) { // A*
                     parent[nr][nc] = {r, c};
                     g_score[nr][nc] = tentative_g;
 
-                    const int f = tentative_g + heuristic(nr, nc, end.first, end.second);
+                    const int h = heuristic(nr, nc, end.first, end.second);
+
+                    int f;
+                    if constexpr (IsWeighted) {
+                        f = tentative_g + (h * heuristic_weight);
+                    } else {
+                        f = tentative_g + h;
+                    }
+
                     open_set.push({nr, nc, f});
                 }
             }
@@ -92,4 +116,12 @@ bool AStarSolver::solve(const Maze &maze_object) { // A*
     }
 
     return false; // No solution found
+}
+
+bool AStarSolver::solve(const Maze &maze_object) {
+    if (this->heuristic_weight == 1) { // Dispatcher to select implementation
+        return solve_impl<false>(maze_object);
+    } else {
+        return solve_impl<true>(maze_object);
+    }
 }

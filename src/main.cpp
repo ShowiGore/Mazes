@@ -30,6 +30,7 @@ int main() {
     maze.save_maze();
 
     AStarSolver solver; // Instancia del solver
+    solver.setHeuristicWeight(10);
 
     std::cout << "Solving maze" << std::endl;
     tp.start();
