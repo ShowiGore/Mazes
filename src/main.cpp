@@ -1,92 +1,47 @@
 #include <iostream>
-#include <unistd.h>
-#include "utilities/TimeProfiler.hpp"
-#include "generators/Maze.hpp"
-#include "generators/RecursiveDivisionMaze.hpp"
-#include "generators/FractalRecursiveDivisionMaze.hpp"
-#include "generators/WilsonsMaze.hpp"
-#include "generators/AldousBroderMaze.hpp"
 #include "generators/HoustonMaze.hpp"
-#include "solvers/RecursiveSolver.hpp"
-#include "solvers/AStarSolver.hpp"
+#include "utilities/TimeProfiler.hpp"
+#include "solvers/BidirectionalGreedyBestFirstSolver.hpp"
 
 int main() {
-    constexpr int HEIGHT = 1001;
-    constexpr int WIDTH = 1001;
+    constexpr int HEIGHT = 10001;
+    constexpr int WIDTH = 10001;
     constexpr unsigned int seed = 42;
 
     TimeProfiler tp;
-    AStarSolver solver;
 
     std::cout << "========================================" << std::endl;
-    std::cout << "1. Testing Aldous-Broder Maze Generator" << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    tp.start();
-    AldousBroderMaze ab_maze(HEIGHT, WIDTH, seed);
-    tp.stop();
-    std::cout << "Aldous-Broder generation time: ";
-    tp.print();
-
-    std::cout << "Solving Aldous-Broder maze with A*..." << std::endl;
-    tp.start();
-    const bool ab_solvable = solver.solve(ab_maze);
-    tp.stop();
-    std::cout << "A* solve time: ";
-    tp.print();
-    std::cout << "Solvable: " << (ab_solvable ? "YES" : "NO") << std::endl;
-
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "2. Testing Wilson's Maze Generator" << std::endl;
+    std::cout << "Generating Houston Maze (" << HEIGHT << "x" << WIDTH << ")" << std::endl;
+    std::cout << "Total grid cells: " << static_cast<size_t>(HEIGHT) * WIDTH << " (~10.00 Billion cells)" << std::endl;
+    std::cout << "Graph nodes: " << (static_cast<size_t>(HEIGHT) / 2) * (WIDTH / 2) << " (~2.50 Billion nodes)" << std::endl;
     std::cout << "========================================" << std::endl;
 
     tp.start();
-    WilsonsMaze wilson_maze(HEIGHT, WIDTH, seed);
+    HoustonMaze maze(HEIGHT, WIDTH, seed);
     tp.stop();
-    std::cout << "Wilson generation time: ";
+    std::cout << "Generation time: ";
     tp.print();
 
-    std::cout << "Solving Wilson's maze with A*..." << std::endl;
+    std::cout << "Saving maze image..." << std::endl;
+    maze.save_maze();
+
+    std::cout << "\nSolving maze with Bidirectional Greedy Best-First Search (CPU)..." << std::endl;
+    BidirectionalGreedyBestFirstSolver solver;
     tp.start();
-    const bool wilson_solvable = solver.solve(wilson_maze);
+    const bool solvable = solver.solve(maze);
     tp.stop();
-    std::cout << "A* solve time: ";
+    std::cout << "Bidirectional Greedy BFS solve time: ";
     tp.print();
-    std::cout << "Solvable: " << (wilson_solvable ? "YES" : "NO") << std::endl;
+    std::cout << "Cells visited: " << solver.getVisitedCount() << std::endl;
+    std::cout << "Solvable: " << (solvable ? "YES" : "NO") << std::endl;
 
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "3. Testing Houston's Algorithm (AB + Wilson Hybrid)" << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    tp.start();
-    HoustonMaze houston_maze(HEIGHT, WIDTH, seed); // Default constructor: automatically uses THEORETICAL_ALPHA (1/3)
-    tp.stop();
-    std::cout << "Houston (theoretical alpha=1/3) generation time: ";
-    tp.print();
-
-    std::cout << "Solving Houston maze with A*..." << std::endl;
-    tp.start();
-    const bool houston_solvable = solver.solve(houston_maze);
-    tp.stop();
-    std::cout << "A* solve time: ";
-    tp.print();
-    std::cout << "Solvable: " << (houston_solvable ? "YES" : "NO") << std::endl;
-
-    std::cout << "\n--- Houston Threshold Transition Sweep (alpha) ---" << std::endl;
-    constexpr float thresholds[] = {0.10f, 0.20f, 0.333f, 0.50f, 0.75f};
-    for (const float alpha : thresholds) {
-        tp.start();
-        HoustonMaze sweep_maze(HEIGHT, WIDTH, seed, alpha);
-        tp.stop();
-        std::cout << "Houston alpha = " << alpha << " : ";
-        tp.print();
+    if (solvable) {
+        std::cout << "Saving solution image..." << std::endl;
+        solver.save_solution(maze);
+    } else {
+        std::cout << "Failed to solve the maze!" << std::endl;
     }
 
-    std::cout << "\nSaving sample mazes to PNG..." << std::endl;
-    houston_maze.save_maze();
-    std::cout << "All tests completed successfully!" << std::endl;
-
+    std::cout << "All operations completed successfully!" << std::endl;
     return 0;
 }
-
-
