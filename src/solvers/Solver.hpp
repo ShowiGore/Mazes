@@ -11,6 +11,7 @@ class Solver {
 protected:
     std::vector<std::vector<bool>> visited;
     std::vector<std::vector<bool>> solution;
+    std::vector<std::vector<bool>> pruned;
     std::pair<int, int> start, end;
     int height = 0, width = 0;
     std::string solver_name = "unknown";

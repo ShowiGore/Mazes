@@ -40,6 +40,7 @@ bool DeadEndFillingSolver::solve(const Maze &maze_object) {
 
     this->visited.assign(this->height, std::vector<bool>(this->width, false));
     this->solution.assign(this->height, std::vector<bool>(this->width, false));
+    this->pruned.assign(this->height, std::vector<bool>(this->width, false));
 
     const size_t total_grid_cells = static_cast<size_t>(this->height) * this->width;
 
@@ -101,7 +102,7 @@ bool DeadEndFillingSolver::solve(const Maze &maze_object) {
         const int r = static_cast<int>(curr_idx / this->width);
         const int c = static_cast<int>(curr_idx % this->width);
 
-        this->visited[r][c] = true;
+        this->pruned[r][c] = true;
 
         for (int i = 0; i < 4; ++i) {
             const int nr = r + d_row[i];

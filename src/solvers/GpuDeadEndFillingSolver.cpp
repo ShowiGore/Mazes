@@ -644,6 +644,7 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
 
         this->solution.assign(this->height, std::vector<bool>(this->width, false));
         this->visited.assign(this->height, std::vector<bool>(this->width, false));
+        this->pruned.assign(this->height, std::vector<bool>(this->width, false));
 
         size_t solution_cells = 0;
         for (int r = 0; r < this->height; ++r) {
@@ -654,10 +655,9 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
 
                 if (surviving_is_path) {
                     this->solution[r][c] = true;
-                    this->visited[r][c] = true;
                     solution_cells++;
                 } else if (original_is_path) {
-                    this->visited[r][c] = true;
+                    this->pruned[r][c] = true;
                 }
             }
         }

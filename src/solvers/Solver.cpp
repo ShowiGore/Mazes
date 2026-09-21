@@ -7,27 +7,16 @@
 std::string Solver::save_solution(const Maze &maze_object, const std::string &custom_filepath) {
     const std::vector<std::vector<bool>> &maze = maze_object.getMaze();
 
-    png::image<png::index_pixel_2> image(this->width, this->height);
-    const png::palette palette = {
-        png::color(0, 0, 0),       // 0: black (wall)
-        png::color(255, 255, 255), // 1: white (unvisited path)
-        png::color(255, 0, 0),     // 2: red (visited path)
-        png::color(0, 255, 0)      // 3: green (solution path)
-    };
-    image.set_palette(palette);
-    image.set_compression_type(png::compression_type_default);
-
-    for (png::uint_32 h = 0; h < image.get_height(); ++h) {
-        for (png::uint_32 w = 0; w < image.get_width(); ++w) {
-            if (maze[h][w]) {
-                image[h][w] = png::index_pixel_2(0); // black
-            } else {
-                if (this->solution[h][w]) {
-                    image[h][w] = png::index_pixel_2(3); // green
-                } else if (this->visited[h][w]) {
-                    image[h][w] = png::index_pixel_2(2); // red
-                } else {
-                    image[h][w] = png::index_pixel_2(1); // white
+    bool has_pruned_cells = false;
+    if (!this->pruned.empty()) {
+        #pragma omp parallel for reduction(||:has_pruned_cells) schedule(static)
+        for (int r = 0; r < this->height; ++r) {
+            if (!has_pruned_cells) {
+                for (int c = 0; c < this->width; ++c) {
+                    if (this->pruned[r][c]) {
+                        has_pruned_cells = true;
+                        break;
+                    }
                 }
             }
         }
@@ -45,7 +34,88 @@ std::string Solver::save_solution(const Maze &maze_object, const std::string &cu
                                       this->solver_name)).string();
     }
 
-    image.write(fullPath);
+    // -------------------------------------------------------------------------
+    // 1. Compact 4-color PNG (2 bits per pixel, png::index_pixel_2)
+    // 2-bit indexed PNG packs 4 pixels per byte, delivering 2x smaller memory footprint
+    // and significantly faster compression than 4-bit/8-bit PNGs.
+    // Paul Tol's Bright Colorblind-Safe Palette:
+    // - 0: Black (0, 0, 0)         -> Wall
+    // - 1: White (255, 255, 255)   -> Unexplored path
+    // - 2: Tol Red (238, 102, 119) -> Explored or Pruned path (processed by solver)
+    // - 3: Tol Green (34, 136, 51) -> Solution path
+    // -------------------------------------------------------------------------
+    {
+        png::image<png::index_pixel_2> image(this->width, this->height);
+        const png::palette palette = {
+            png::color(0, 0, 0),         // 0: black (wall)
+            png::color(255, 255, 255),   // 1: white (unexplored path)
+            png::color(238, 102, 119),   // 2: Tol red / rose (explored or pruned)
+            png::color(34, 136, 51)      // 3: Tol green (solution path)
+        };
+        image.set_palette(palette);
+        image.set_compression_type(png::compression_type_default);
+
+        for (png::uint_32 h = 0; h < image.get_height(); ++h) {
+            for (png::uint_32 w = 0; w < image.get_width(); ++w) {
+                if (maze[h][w]) {
+                    image[h][w] = png::index_pixel_2(0); // black (wall)
+                } else if (this->solution[h][w]) {
+                    image[h][w] = png::index_pixel_2(3); // Tol green (solution)
+                } else if (this->visited[h][w] || (has_pruned_cells && this->pruned[h][w])) {
+                    image[h][w] = png::index_pixel_2(2); // Tol red (explored or pruned)
+                } else {
+                    image[h][w] = png::index_pixel_2(1); // white (unexplored path)
+                }
+            }
+        }
+        image.write(fullPath);
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Detailed 5-color PNG (4 bits per pixel, png::index_pixel_4)
+    // Generated ONLY when the solver has pruned cells to visually distinguish
+    // dead-end pruning (Tol Blue) from active search exploration (Tol Red).
+    // Paul Tol's Bright Colorblind-Safe Palette:
+    // - 0: Black (0, 0, 0)         -> Wall
+    // - 1: White (255, 255, 255)   -> Unexplored path
+    // - 2: Tol Red (238, 102, 119) -> Explored path by search
+    // - 3: Tol Green (34, 136, 51) -> Solution path
+    // - 4: Tol Blue (68, 119, 170) -> Pruned dead ends
+    // -------------------------------------------------------------------------
+    if (has_pruned_cells) {
+        std::filesystem::path p(fullPath);
+        std::string detailedPath = (p.parent_path() / (p.stem().string() + "_detailed" + p.extension().string())).string();
+
+        png::image<png::index_pixel_4> image(this->width, this->height);
+        const png::palette palette = {
+            png::color(0, 0, 0),         // 0: black (wall)
+            png::color(255, 255, 255),   // 1: white (unexplored path)
+            png::color(238, 102, 119),   // 2: Tol red / rose (explored path by search)
+            png::color(34, 136, 51),     // 3: Tol green (solution path)
+            png::color(68, 119, 170)     // 4: Tol blue (pruned dead ends)
+        };
+        image.set_palette(palette);
+        image.set_compression_type(png::compression_type_default);
+
+        for (png::uint_32 h = 0; h < image.get_height(); ++h) {
+            for (png::uint_32 w = 0; w < image.get_width(); ++w) {
+                if (maze[h][w]) {
+                    image[h][w] = png::index_pixel_4(0); // black (wall)
+                } else if (this->solution[h][w]) {
+                    image[h][w] = png::index_pixel_4(3); // Tol green (solution)
+                } else if (this->visited[h][w]) {
+                    image[h][w] = png::index_pixel_4(2); // Tol red (explored path)
+                } else if (this->pruned[h][w]) {
+                    image[h][w] = png::index_pixel_4(4); // Tol blue (pruned dead end)
+                } else {
+                    image[h][w] = png::index_pixel_4(1); // white (unexplored path)
+                }
+            }
+        }
+        image.write(detailedPath);
+        std::cout << "Saved detailed 5-color solution image: " << detailedPath << std::endl;
+    }
+
     return fullPath;
 }
 

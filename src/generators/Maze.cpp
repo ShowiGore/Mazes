@@ -311,11 +311,11 @@ bool Maze::load_binary(const std::string &filepath) {
 
     in.read(reinterpret_cast<char*>(buffer.data()), total_bytes);
 
-    size_t bit_idx = 0;
+    #pragma omp parallel for schedule(static)
     for (int r = 0; r < this->height; ++r) {
-        for (int c = 0; c < this->width; ++c) {
-            this->maze[r][c] = (buffer[bit_idx / 8] & (1 << (bit_idx % 8))) != 0;
-            ++bit_idx;
+        size_t bit_idx = static_cast<size_t>(r) * this->width;
+        for (int c = 0; c < this->width; ++c, ++bit_idx) {
+            this->maze[r][c] = (buffer[bit_idx >> 3] & (1 << (bit_idx & 7))) != 0;
         }
     }
 

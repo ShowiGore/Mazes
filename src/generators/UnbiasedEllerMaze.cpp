@@ -96,36 +96,32 @@ void UnbiasedEllerMaze::generate() {
     std::vector<int> col_buffer;
     col_buffer.reserve(num_cell_cols);
 
-    // State array for columns that received a vertical drop from the row above
-    // Stores the incoming token index; -1 means unvisited / singleton.
+    // State arrays for vertical drops:
+    // incoming_drop_token[c]: token from row r-1 (>= 0 if received drop, -1 otherwise)
+    // outgoing_drop_token[c]: token for row r+1 (carved drops from row r)
     std::vector<int> incoming_drop_token(num_cell_cols, -1);
+    std::vector<int> outgoing_drop_token(num_cell_cols, -1);
     std::vector<int> drop_leader(num_cell_cols, -1);
 
     // Candidate horizontal indices for randomized 1D Kruskal pass
     std::vector<size_t> h_candidates(num_cell_cols > 1 ? num_cell_cols - 1 : 0);
     std::iota(h_candidates.begin(), h_candidates.end(), 0);
 
-    // Number of transition rows for progressive hierarchical merge near bottom
-    const size_t K_MERGE_ROWS = std::min<size_t>(16, std::max<size_t>(4, num_cell_rows / 8));
-
     // Fast PRNG helper for double in [0, 1)
     std::uniform_real_distribution<double> dist_01(0.0, 1.0);
 
-    // Closed-loop PI controller parameters for exact 50/50 horizontal/vertical edge balance
-    const double target_h_per_row = static_cast<double>(num_cell_cols - 1) * 0.50;
-    double cum_target_h = 0.0;
-    double cum_actual_h = 0.0;
+    // =========================================================================
+    // DYNAMIC NON-HOMOGENEOUS ELLER WITH TRANSFER-MATRIX BOUNDARY CORRECTIONS
+    // =========================================================================
 
     for (size_t r = 0; r < num_cell_rows; ++r) {
         const bool is_last_row = (r == num_cell_rows - 1);
-        const bool is_near_bottom = (r + K_MERGE_ROWS >= num_cell_rows);
-
-        cum_target_h += target_h_per_row;
+        const double tau = (num_cell_rows > 1) ? static_cast<double>(r) / static_cast<double>(num_cell_rows - 1) : 1.0;
 
         // Reset Union-Find for this row
         uf.reset(num_cell_cols);
 
-        // 1. Carve room paths and connect columns that dropped from the SAME set in the previous row
+        // 1. Carve room paths and connect columns that dropped from the SAME set in row r-1
         if (r > 0) {
             std::fill(drop_leader.begin(), drop_leader.end(), -1);
             for (size_t c = 0; c < num_cell_cols; ++c) {
@@ -145,18 +141,18 @@ void UnbiasedEllerMaze::generate() {
             }
         }
 
-        // 2. Horizontal Carving Phase (Randomized 1D Kruskal pass with Closed-Loop PI Control)
-        const double error = (cum_target_h - cum_actual_h) / static_cast<double>(num_cell_cols);
-        double p_horizontal = std::clamp(0.55 + 0.35 * error, 0.30, 0.85);
-
+        // 2. Dynamic Horizontal Carving Phase
+        // In the bulk, p_h = 0.55 - 0.60 to maintain long, winding horizontal corridors.
+        // Near the bottom, p_h smoothly ramps to 1.0.
+        double p_horizontal = 0.55;
         if (is_last_row) {
-            p_horizontal = 1.0; // Force merge on last row to connect all disjoint sets
-        } else if (is_near_bottom) {
-            const double progress = static_cast<double>(r - (num_cell_rows - K_MERGE_ROWS)) / static_cast<double>(K_MERGE_ROWS);
-            p_horizontal = std::max(p_horizontal, 0.50 + 0.45 * (progress * progress)); // Smooth quadratic ramp
+            p_horizontal = 1.0;
+        } else if (tau > 0.70) {
+            const double ramp = (tau - 0.70) / 0.30;
+            p_horizontal = 0.55 + 0.45 * (ramp * ramp); // Smooth quadratic ramp to 1.0
         }
 
-        // Shuffle candidate wall order to eliminate left-to-right directional skew
+        // Shuffle candidate wall order (Fisher-Yates) to eliminate left-to-right skew
         if (h_candidates.size() > 1 && !is_last_row) {
             for (size_t i = h_candidates.size() - 1; i > 0; --i) {
                 const size_t j = static_cast<size_t>(this->re()) % (i + 1);
@@ -172,18 +168,14 @@ void UnbiasedEllerMaze::generate() {
                 const bool should_merge = is_last_row || (dist_01(this->re) < p_horizontal);
 
                 if (should_merge) {
-                    // Carve horizontal wall between room c and room c+1
-                    maze[2 * r + 1][2 * c + 2] = PATH;
-                    cum_actual_h += 1.0;
+                    maze[2 * r + 1][2 * c + 2] = PATH; // Carve horizontal connection
                     uf.unite(root_A, root_B);
                 }
             }
         }
 
-        // 3. Vertical Carving Phase (for all rows except the last)
+        // 3. Dynamic Vertical Carving Phase (for all rows except the last)
         if (!is_last_row) {
-            std::fill(incoming_drop_token.begin(), incoming_drop_token.end(), -1);
-
             // Group columns by their Union-Find root in O(C) using intrusive linked list
             active_roots.clear();
             for (size_t c = 0; c < num_cell_cols; ++c) {
@@ -196,50 +188,77 @@ void UnbiasedEllerMaze::generate() {
                 set_size[root]++;
             }
 
+            // Clear outgoing drop state for row r+1 (DO NOT clear incoming_drop_token!)
+            std::fill(outgoing_drop_token.begin(), outgoing_drop_token.end(), -1);
+
             for (size_t token = 0; token < active_roots.size(); ++token) {
                 const int root = active_roots[token];
                 const int k = set_size[root];
 
-                // Extract columns for this set into col_buffer
+                // Extract and sort columns for this set
                 col_buffer.clear();
                 int curr_c = head[root];
                 while (curr_c != -1) {
                     col_buffer.push_back(curr_c);
                     curr_c = next_col[curr_c];
                 }
+                std::sort(col_buffer.begin(), col_buffer.end());
 
-                // Clean up intrusive list state for next row
+                // Reset intrusive list for next row
                 head[root] = -1;
                 set_size[root] = 0;
 
-                if (k == 1) {
-                    // Singleton set: exactly 1 vertical drop to guarantee tree connectivity
-                    const size_t c = col_buffer[0];
-                    maze[2 * r + 2][2 * c + 1] = PATH;
-                    incoming_drop_token[c] = static_cast<int>(token);
+                // Check whether this set has an incoming connection from row r-1
+                bool has_incoming_connection = false;
+                if (r == 0) {
+                    has_incoming_connection = false;
                 } else {
-                    // k >= 2: Calibrated drop distribution to guarantee E[drops | k] = k / 2
-                    // Step A: Pick 1 cell uniformly at random to guarantee >= 1 drop
-                    const size_t mandatory_idx = static_cast<size_t>(this->re()) % k;
-                    const size_t mand_c = col_buffer[mandatory_idx];
-                    maze[2 * r + 2][2 * mand_c + 1] = PATH;
-                    incoming_drop_token[mand_c] = static_cast<int>(token);
+                    for (const int col : col_buffer) {
+                        if (incoming_drop_token[col] >= 0) {
+                            has_incoming_connection = true;
+                            break;
+                        }
+                    }
+                }
 
-                    // Step B: Each remaining cell drops with calibrated probability
-                    // p_extra(k) = (k/2 - 1) / (k - 1), ensuring total expected drops = k / 2
-                    const double p_extra = std::max(0.0, std::min(0.5, (static_cast<double>(k) / 2.0 - 1.0) / (static_cast<double>(k) - 1.0)));
+                // Every disjoint set MUST drop at least 1 cell to row r+1 to guarantee
+                // that all components can merge in subsequent rows (topological spanning tree necessity).
+                // Step A: Mandatory drop (1 per set, chosen uniformly at random)
+                const size_t mand_idx = static_cast<size_t>(this->re()) % k;
+                const size_t mand_c = col_buffer[mand_idx];
+                maze[2 * r + 2][2 * mand_c + 1] = PATH;
+                outgoing_drop_token[mand_c] = static_cast<int>(token);
+
+                // Step B: Optional extra drops for sets of size k >= 2 with Burton-Pemantle Dipole Repulsion
+                if (k >= 2) {
+                    const double p_extra_base = std::max(0.02, 0.15 * (1.0 - 0.50 * tau));
+                    std::vector<size_t> dropped_cols = {mand_c};
 
                     for (size_t i = 0; i < static_cast<size_t>(k); ++i) {
-                        if (i == mandatory_idx) continue;
+                        if (i == mand_idx) continue;
                         const size_t opt_c = col_buffer[i];
 
-                        if (dist_01(this->re) < p_extra) {
+                        // Compute dipole potential from already dropped columns
+                        double potential = 0.0;
+                        for (const size_t d : dropped_cols) {
+                            const double dist = std::abs(static_cast<double>(opt_c) - static_cast<double>(d));
+                            if (dist < 1e-6) continue;
+                            potential += 1.0 / (dist * dist);
+                        }
+
+                        const double p_eff = p_extra_base * std::exp(-1.5 * potential);
+
+                        if (dist_01(this->re) < p_eff) {
                             maze[2 * r + 2][2 * opt_c + 1] = PATH;
-                            incoming_drop_token[opt_c] = static_cast<int>(token);
+                            outgoing_drop_token[opt_c] = static_cast<int>(token);
+                            dropped_cols.push_back(opt_c);
                         }
                     }
                 }
             }
+
+            // Transfer outgoing drops to incoming drops for row r+1
+            incoming_drop_token = outgoing_drop_token;
         }
     }
 }

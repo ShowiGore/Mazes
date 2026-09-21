@@ -17,6 +17,7 @@ Mazes
 
 # Generated mazes, solutions, and media
 generated_mazes/
+experiments/
 *.png
 *.maze
 *.sol
