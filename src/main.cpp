@@ -24,6 +24,8 @@
 #include "solvers/DeadEndFillingSolver.hpp"
 #include "solvers/GpuDeadEndFillingSolver.hpp"
 #include "solvers/GpuBidirectionalBfsSolver.hpp"
+#include "solvers/GpuBidirectionalGbfsSolver.hpp"
+#include "solvers/GpuHierarchicalPathfindingSolver.hpp"
 #include "solvers/AStarSolver.hpp"
 #include "solvers/RecursiveSolver.hpp"
 
@@ -286,6 +288,10 @@ int main(int argc, char* argv[]) {
             solver = std::make_unique<GpuDeadEndFillingSolver>();
         } else if (solver_name == "gpu-bidir-bfs" || solver_name == "gpu-bfs" || solver_name == "gpu-bidirectional-bfs") {
             solver = std::make_unique<GpuBidirectionalBfsSolver>();
+        } else if (solver_name == "gpu-bidir-gbfs" || solver_name == "gpu-gbfs" || solver_name == "gpu-beam-gbfs") {
+            solver = std::make_unique<GpuBidirectionalGbfsSolver>();
+        } else if (solver_name == "gpu-hpa" || solver_name == "gpu-hierarchical" || solver_name == "hpa") {
+            solver = std::make_unique<GpuHierarchicalPathfindingSolver>();
         } else if (solver_name == "astar") {
             solver = std::make_unique<AStarSolver>();
         } else if (solver_name == "recursive") {
@@ -315,6 +321,16 @@ int main(int argc, char* argv[]) {
             std::cout << "GPU Device:     " << gpu_bfs->getDeviceName() << " (" << gpu_bfs->getPlatformName() << ")\n";
             std::cout << "Frontier Steps: " << gpu_bfs->getExpansionsCount() << "\n";
             std::cout << "Cells visited:  " << gpu_bfs->getVisitedCount() << std::endl;
+        }
+        if (auto* gpu_gbfs = dynamic_cast<GpuBidirectionalGbfsSolver*>(solver.get())) {
+            std::cout << "GPU Device:     " << gpu_gbfs->getDeviceName() << " (" << gpu_gbfs->getPlatformName() << ")\n";
+            std::cout << "Frontier Steps: " << gpu_gbfs->getExpansionsCount() << "\n";
+            std::cout << "Cells visited:  " << gpu_gbfs->getVisitedCount() << std::endl;
+        }
+        if (auto* gpu_hpa = dynamic_cast<GpuHierarchicalPathfindingSolver*>(solver.get())) {
+            std::cout << "GPU Device:     " << gpu_hpa->getDeviceName() << " (" << gpu_hpa->getPlatformName() << ")\n";
+            std::cout << "Portals:        " << gpu_hpa->getPortalsCount() << "\n";
+            std::cout << "Macro Steps:    " << gpu_hpa->getMacroSteps() << std::endl;
         }
 
         if (solvable) {
