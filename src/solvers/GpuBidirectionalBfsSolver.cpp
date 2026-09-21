@@ -95,6 +95,7 @@ struct GpuBidirectionalBfsSolver::Impl {
     cl::CommandQueue queue;
     cl::Program program;
     cl::Kernel kernel;
+    cl::Kernel kernel_batched;
     bool ready = false;
 };
 
@@ -204,6 +205,7 @@ bool GpuBidirectionalBfsSolver::ensureOpenCLInitialized() {
         }
 
         pimpl->kernel = cl::Kernel(pimpl->program, "expand_frontier_step");
+        pimpl->kernel_batched = cl::Kernel(pimpl->program, "expand_frontier_batched");
         pimpl->ready = true;
 
         std::cout << "[GpuBidirectionalBfsSolver] OpenCL Initialized on "
@@ -261,17 +263,22 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
         cl::Buffer buf_b_curr(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
         cl::Buffer buf_b_next(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
 
-        cl::Buffer buf_next_count(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_f_count(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_b_count(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
         cl::Buffer buf_collision_found(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
         cl::Buffer buf_collision_cell_A(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
         cl::Buffer buf_collision_cell_B(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_steps_executed(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
 
-        // Upload initial frontiers
+        // Upload initial frontiers and counters
+        const int one = 1;
+        const int zero = 0;
         pimpl->queue.enqueueWriteBuffer(buf_f_curr, CL_FALSE, 0, sizeof(int), &start_idx);
         pimpl->queue.enqueueWriteBuffer(buf_b_curr, CL_FALSE, 0, sizeof(int), &end_idx);
-
-        const int zero = 0;
-        pimpl->queue.enqueueWriteBuffer(buf_collision_found, CL_TRUE, 0, sizeof(int), &zero);
+        pimpl->queue.enqueueWriteBuffer(buf_f_count, CL_FALSE, 0, sizeof(int), &one);
+        pimpl->queue.enqueueWriteBuffer(buf_b_count, CL_FALSE, 0, sizeof(int), &one);
+        pimpl->queue.enqueueWriteBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &zero);
+        pimpl->queue.enqueueWriteBuffer(buf_steps_executed, CL_TRUE, 0, sizeof(int), &zero);
 
         int f_count = 1;
         int b_count = 1;
@@ -281,70 +288,45 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
         int cell_A = -1;
         int cell_B = -1;
 
-        constexpr size_t LOCAL_SIZE = 64;
+        constexpr int BATCH_SIZE = 128;
+        constexpr size_t LOCAL_WORKGROUP_SIZE = 512;
 
-        // Bidirectional Frontier Expansion Loop
-        while (f_count > 0 && b_count > 0 && collision_found == 0) {
-            total_frontier_expansions++;
+        pimpl->kernel_batched.setArg(0, buf_f_curr);
+        pimpl->kernel_batched.setArg(1, buf_f_next);
+        pimpl->kernel_batched.setArg(2, buf_b_curr);
+        pimpl->kernel_batched.setArg(3, buf_b_next);
+        pimpl->kernel_batched.setArg(4, buf_f_count);
+        pimpl->kernel_batched.setArg(5, buf_b_count);
+        pimpl->kernel_batched.setArg(6, buf_state);
+        pimpl->kernel_batched.setArg(7, this->height);
+        pimpl->kernel_batched.setArg(8, this->width);
+        pimpl->kernel_batched.setArg(9, BATCH_SIZE);
+        pimpl->kernel_batched.setArg(10, buf_collision_found);
+        pimpl->kernel_batched.setArg(11, buf_collision_cell_A);
+        pimpl->kernel_batched.setArg(12, buf_collision_cell_B);
+        pimpl->kernel_batched.setArg(13, buf_steps_executed);
 
-            // Expand Forward Frontier
-            {
-                pimpl->queue.enqueueWriteBuffer(buf_next_count, CL_FALSE, 0, sizeof(int), &zero);
+        // Batched Persistent Frontier Expansion Loop
+        while (collision_found == 0 && f_count > 0 && b_count > 0) {
+            pimpl->queue.enqueueNDRangeKernel(
+                pimpl->kernel_batched,
+                cl::NullRange,
+                cl::NDRange(LOCAL_WORKGROUP_SIZE),
+                cl::NDRange(LOCAL_WORKGROUP_SIZE)
+            );
 
-                pimpl->kernel.setArg(0, buf_f_curr);
-                pimpl->kernel.setArg(1, f_count);
-                pimpl->kernel.setArg(2, buf_f_next);
-                pimpl->kernel.setArg(3, buf_next_count);
-                pimpl->kernel.setArg(4, buf_state);
-                pimpl->kernel.setArg(5, this->height);
-                pimpl->kernel.setArg(6, this->width);
-                pimpl->kernel.setArg(7, FORWARD_TAG);
-                pimpl->kernel.setArg(8, BACKWARD_TAG);
-                pimpl->kernel.setArg(9, buf_collision_found);
-                pimpl->kernel.setArg(10, buf_collision_cell_A);
-                pimpl->kernel.setArg(11, buf_collision_cell_B);
+            // Read collision status and counts once per batch
+            pimpl->queue.enqueueReadBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &collision_found);
+            pimpl->queue.enqueueReadBuffer(buf_f_count, CL_FALSE, 0, sizeof(int), &f_count);
+            pimpl->queue.enqueueReadBuffer(buf_b_count, CL_TRUE, 0, sizeof(int), &b_count);
 
-                const cl::NDRange global_f(((f_count + LOCAL_SIZE - 1) / LOCAL_SIZE) * LOCAL_SIZE);
-                pimpl->queue.enqueueNDRangeKernel(pimpl->kernel, cl::NullRange, global_f, cl::NDRange(LOCAL_SIZE));
-
-                pimpl->queue.enqueueReadBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &collision_found);
-                pimpl->queue.enqueueReadBuffer(buf_next_count, CL_TRUE, 0, sizeof(int), &f_count);
-
-                cells_visited += f_count;
-                std::swap(buf_f_curr, buf_f_next);
-
-                if (collision_found != 0) break;
-            }
-
-            // Expand Backward Frontier
-            {
-                pimpl->queue.enqueueWriteBuffer(buf_next_count, CL_FALSE, 0, sizeof(int), &zero);
-
-                pimpl->kernel.setArg(0, buf_b_curr);
-                pimpl->kernel.setArg(1, b_count);
-                pimpl->kernel.setArg(2, buf_b_next);
-                pimpl->kernel.setArg(3, buf_next_count);
-                pimpl->kernel.setArg(4, buf_state);
-                pimpl->kernel.setArg(5, this->height);
-                pimpl->kernel.setArg(6, this->width);
-                pimpl->kernel.setArg(7, BACKWARD_TAG);
-                pimpl->kernel.setArg(8, FORWARD_TAG);
-                pimpl->kernel.setArg(9, buf_collision_found);
-                pimpl->kernel.setArg(10, buf_collision_cell_A);
-                pimpl->kernel.setArg(11, buf_collision_cell_B);
-
-                const cl::NDRange global_b(((b_count + LOCAL_SIZE - 1) / LOCAL_SIZE) * LOCAL_SIZE);
-                pimpl->queue.enqueueNDRangeKernel(pimpl->kernel, cl::NullRange, global_b, cl::NDRange(LOCAL_SIZE));
-
-                pimpl->queue.enqueueReadBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &collision_found);
-                pimpl->queue.enqueueReadBuffer(buf_next_count, CL_TRUE, 0, sizeof(int), &b_count);
-
-                cells_visited += b_count;
-                std::swap(buf_b_curr, buf_b_next);
-
-                if (collision_found != 0) break;
-            }
+            if (collision_found != 0) break;
+            if (f_count == 0 || b_count == 0) break;
         }
+
+        int steps_executed = 0;
+        pimpl->queue.enqueueReadBuffer(buf_steps_executed, CL_TRUE, 0, sizeof(int), &steps_executed);
+        total_frontier_expansions = steps_executed;
 
         if (collision_found == 0) {
             std::cerr << "[GpuBidirectionalBfsSolver] No path found between Start and End.\n";
