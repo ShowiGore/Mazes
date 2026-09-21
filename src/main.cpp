@@ -23,6 +23,7 @@
 #include "solvers/GreedyBestFirstSolver.hpp"
 #include "solvers/DeadEndFillingSolver.hpp"
 #include "solvers/GpuDeadEndFillingSolver.hpp"
+#include "solvers/GpuBidirectionalBfsSolver.hpp"
 #include "solvers/AStarSolver.hpp"
 #include "solvers/RecursiveSolver.hpp"
 
@@ -72,6 +73,7 @@ void print_help(const char* prog_name) {
               << "                               gbfs                (Greedy Best-First Search)\n"
               << "                               dead-end            (Deterministic O(N) Dead-End Filling CPU)\n"
               << "                               gpu-dead-end        (Parallel Dead-End Filling OpenCL GPU)\n"
+              << "                               gpu-bidir-bfs       (Parallel Frontier Expansion Bidirectional BFS GPU)\n"
               << "                               astar               (A* search)\n"
               << "                               recursive           (Recursive DFS)\n"
               << "                               all                 (Run all solvers and compare)\n"
@@ -261,7 +263,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> active_solvers;
     for (const auto& s : config.solvers) {
         if (s == "all") {
-            active_solvers = {"bidir-gbfs", "gbfs", "dead-end", "gpu-dead-end", "astar", "recursive"};
+            active_solvers = {"bidir-gbfs", "gbfs", "dead-end", "gpu-dead-end", "gpu-bidir-bfs", "astar", "recursive"};
             break;
         }
         active_solvers.push_back(s);
@@ -282,6 +284,8 @@ int main(int argc, char* argv[]) {
             solver = std::make_unique<DeadEndFillingSolver>();
         } else if (solver_name == "gpu-dead-end" || solver_name == "gpu" || solver_name == "opencl") {
             solver = std::make_unique<GpuDeadEndFillingSolver>();
+        } else if (solver_name == "gpu-bidir-bfs" || solver_name == "gpu-bfs" || solver_name == "gpu-bidirectional-bfs") {
+            solver = std::make_unique<GpuBidirectionalBfsSolver>();
         } else if (solver_name == "astar") {
             solver = std::make_unique<AStarSolver>();
         } else if (solver_name == "recursive") {
@@ -301,11 +305,16 @@ int main(int argc, char* argv[]) {
         std::cout << "Solvable:   " << (solvable ? "YES" : "NO") << std::endl;
 
         if (auto* bidir = dynamic_cast<BidirectionalGreedyBestFirstSolver*>(solver.get())) {
-            std::cout << "Cells visited: " << bidir->getVisitedCount() << std::endl;
+            std::cout << "Cells visited:  " << bidir->getVisitedCount() << std::endl;
         }
         if (auto* gpu = dynamic_cast<GpuDeadEndFillingSolver*>(solver.get())) {
             std::cout << "GPU Device:     " << gpu->getDeviceName() << " (" << gpu->getPlatformName() << ")\n";
             std::cout << "GPU Iterations: " << gpu->getIterationCount() << std::endl;
+        }
+        if (auto* gpu_bfs = dynamic_cast<GpuBidirectionalBfsSolver*>(solver.get())) {
+            std::cout << "GPU Device:     " << gpu_bfs->getDeviceName() << " (" << gpu_bfs->getPlatformName() << ")\n";
+            std::cout << "Frontier Steps: " << gpu_bfs->getExpansionsCount() << "\n";
+            std::cout << "Cells visited:  " << gpu_bfs->getVisitedCount() << std::endl;
         }
 
         if (solvable) {
