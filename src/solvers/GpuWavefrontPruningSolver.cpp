@@ -361,13 +361,43 @@ bool GpuWavefrontPruningSolver::solve(const Maze &maze) {
         cl::Buffer *cur_in = &buf_grid_A;
         cl::Buffer *cur_out = &buf_grid_B;
 
-        const int batch_passes = (this->user_batch_size > 0) ? this->user_batch_size : 32;
+        // Compute adaptive GPU execution parameters (batch size, workgroup geometry)
+        const auto adaptive_cfg = computeGpuAdaptiveConfig(
+            pimpl->gpu.device,
+            this->height,
+            this->width,
+            sizeof(uint32_t),
+            this->user_batch_size
+        );
+        this->config_rationale = adaptive_cfg.rationale;
 
-        for (int pass = 0; pass < max_prune_iterations; pass += batch_passes) {
+        // ---------------------------------------------------------------------
+        // THEORETICAL / ADAPTIVE PRUNING STRATEGY:
+        //
+        // 1. Pass Cap:
+        //    Scales with grid perimeter: min(2048, max(64, (H + W) / 4))
+        // 2. Hardware-Adaptive Batch Size:
+        //    Uses computeGpuAdaptiveConfig (batch_size) to align with workgroups.
+        // 3. Marginal Pruning Efficiency Threshold (Breakeven Point):
+        //    Stops when changes in a batch drop below min_prune_threshold * passes_to_run.
+        // ---------------------------------------------------------------------
+        const int effective_max_passes = (this->max_prune_iterations > 0)
+            ? this->max_prune_iterations
+            : std::min<int>(2048, std::max<int>(64, (H + W) / 4));
+
+        const int batch_passes = (this->user_batch_size > 0)
+            ? this->user_batch_size
+            : adaptive_cfg.batch_size;
+
+        const int min_prune_threshold = (this->user_min_prune_threshold > 0)
+            ? this->user_min_prune_threshold
+            : std::max<int>(1, (H + W) / 16);
+
+        for (int pass = 0; pass < effective_max_passes; pass += batch_passes) {
             const int zero = 0;
             pimpl->gpu.queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);
 
-            const int passes_to_run = std::min(batch_passes, max_prune_iterations - pass);
+            const int passes_to_run = std::min(batch_passes, effective_max_passes - pass);
             for (int b = 0; b < passes_to_run; ++b) {
                 pimpl->kernel_prune.setArg(0, *cur_in);
                 pimpl->kernel_prune.setArg(1, *cur_out);
@@ -382,7 +412,10 @@ bool GpuWavefrontPruningSolver::solve(const Maze &maze) {
             pimpl->gpu.queue.enqueueReadBuffer(buf_changes, CL_TRUE, 0, sizeof(int), &changes);
             this->total_pruned += changes;
 
-            if (changes == 0) break; // Fully converged!
+            // Stop if fully converged (0) OR if marginal pruning rate drops below breakeven threshold
+            if (changes == 0 || changes < (min_prune_threshold * passes_to_run)) {
+                break;
+            }
         }
 
         // cur_in holds the final pruned maze buffer; release the inactive ping-pong
@@ -417,7 +450,8 @@ bool GpuWavefrontPruningSolver::solve(const Maze &maze) {
         pimpl->gpu.queue.enqueueFillBuffer(buf_parent_bwd, zero_u32, 0, total_dir_bytes);
 
         // Active frontier queues in VRAM (sparse: only contains currently expanding cells)
-        constexpr int MAX_FRONTIER = 524288;
+        // Adaptively sized based on maze perimeter scale, bounded by VRAM
+        const int MAX_FRONTIER = static_cast<int>(std::min<size_t>(1048576, std::max<size_t>(4096, static_cast<size_t>(H + W) * 4)));
         cl::Buffer buf_fwd_curr(pimpl->gpu.context, CL_MEM_READ_WRITE, MAX_FRONTIER * sizeof(cl_int2));
         cl::Buffer buf_fwd_next(pimpl->gpu.context, CL_MEM_READ_WRITE, MAX_FRONTIER * sizeof(cl_int2));
         cl::Buffer buf_bwd_curr(pimpl->gpu.context, CL_MEM_READ_WRITE, MAX_FRONTIER * sizeof(cl_int2));
@@ -540,10 +574,8 @@ bool GpuWavefrontPruningSolver::solve(const Maze &maze) {
             return false;
         }
 
-        // =====================================================================
-        // STEP 4: Phase 3 - In-VRAM Path Reconstruction
-        // =====================================================================
-        constexpr int MAX_PATH_CELLS = 4194304;
+        // Adaptive path reconstruction buffer sizing
+        const int MAX_PATH_CELLS = static_cast<int>(std::min<size_t>(4194304, std::max<size_t>(65536, static_cast<size_t>(H + W) * 16)));
         cl::Buffer buf_path_fwd(pimpl->gpu.context, CL_MEM_READ_WRITE, MAX_PATH_CELLS * sizeof(cl_int2));
         cl::Buffer buf_path_bwd(pimpl->gpu.context, CL_MEM_READ_WRITE, MAX_PATH_CELLS * sizeof(cl_int2));
         cl::Buffer buf_len_fwd(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));

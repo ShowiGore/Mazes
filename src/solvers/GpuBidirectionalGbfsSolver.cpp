@@ -1,3 +1,26 @@
+/**
+ * =============================================================================
+ * GPU BIDIRECTIONAL GREEDY BEST-FIRST SEARCH (GBFS) SOLVER
+ * =============================================================================
+ *
+ * 1. ALGORITHM STRATEGY:
+ *    - GPU Two-Tier Priority Frontier: Implements heuristic priority search on GPU
+ *      without the serial bottleneck of heap maintenance.
+ *      * Primary Frontier (High Priority): Stores neighbor nodes that move closer
+ *        to the destination (Delta h <= 0). Expanded immediately in the current batch.
+ *      * Secondary Circular Queue (Low Priority): Stores nodes that increase heuristic
+ *        distance (Delta h > 0, backtracking). Re-injected when primary frontier empties.
+ *    - Bidirectional Search: Expands simultaneously from 'start' toward 'end' and
+ *      from 'end' toward 'start', terminating the instant the two frontiers collide.
+ *
+ * 2. HARDWARE & MAZE ADAPTIVE EXECUTION:
+ *    - Uses computeGpuAdaptiveConfig() to adaptively determine:
+ *      * Batch size: Scaled with maze dimensions to minimize kernel launches.
+ *      * Workgroup size: Sized to 256 or 512 to maximize GPU SM thread occupancy.
+ *      * Frontier capacity: Sized based on VRAM headroom to guarantee memory safety.
+ * =============================================================================
+ */
+
 #include "GpuBidirectionalGbfsSolver.hpp"
 #include <iostream>
 #include <vector>

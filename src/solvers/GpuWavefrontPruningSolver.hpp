@@ -18,7 +18,8 @@ private:
     size_t total_pruned = 0;
     int expansions_count = 0;
     size_t visited_count = 0;
-    int max_prune_iterations = 500;
+    int max_prune_iterations = -1; // -1 indicates adaptive determination
+    int user_min_prune_threshold = 0; // 0 indicates adaptive threshold
 
     bool ensureOpenCLInitialized();
 
@@ -36,6 +37,7 @@ public:
     [[nodiscard]] int getExpansionsCount() const { return expansions_count; }
     [[nodiscard]] size_t getVisitedCount() const { return visited_count; }
     void setMaxPruneIterations(int iters) { max_prune_iterations = iters; }
+    void setMinPruneThreshold(int threshold) { user_min_prune_threshold = threshold; }
 };
 
 #endif // MAZES_GPUWAVEFRONTPRUNINGSOLVER_HPP

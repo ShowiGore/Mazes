@@ -1,3 +1,25 @@
+/**
+ * =============================================================================
+ * GPU BIDIRECTIONAL BREADTH-FIRST SEARCH (BFS) SOLVER
+ * =============================================================================
+ *
+ * 1. ALGORITHM STRATEGY:
+ *    - Dual-Frontier Expansion: Simultaneously expands a Forward frontier from 'start'
+ *      and a Backward frontier from 'end' across level-synchronous BFS wavefronts.
+ *    - In an unweighted planar graph, BFS guarantees finding the shortest geodesic path.
+ *    - Expanding bidirectionally cuts the search radius from R to R/2, reducing the
+ *      number of explored cells from O(pi * R^2) to O(2 * pi * (R/2)^2) = O(0.5 * pi * R^2).
+ *    - Collision is detected atomically via compare-and-exchange on the state grid
+ *      (Forward tag = 0x10, Backward tag = 0x20).
+ *
+ * 2. HARDWARE & MAZE ADAPTIVE EXECUTION:
+ *    - Uses computeGpuAdaptiveConfig() to adaptively determine:
+ *      * Workgroup size (clamped to GPU max workgroup size, aligned to warp/wavefront 32).
+ *      * Frontier buffer capacity (scaled to available VRAM headroom to prevent OOM).
+ *      * Batch size (scaled with maze diameter to amortize kernel launch and host sync).
+ * =============================================================================
+ */
+
 #include "GpuBidirectionalBfsSolver.hpp"
 #include "utilities/GpuUtils.hpp"
 

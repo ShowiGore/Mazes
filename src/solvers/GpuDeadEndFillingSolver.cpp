@@ -1,3 +1,33 @@
+/**
+ * =============================================================================
+ * GPU DEAD-END FILLING SOLVER (CELLULAR AUTOMATON PRUNING)
+ * =============================================================================
+ *
+ * 1. ALGORITHM STRATEGY:
+ *    - Massively Parallel Cellular Automaton: Eliminates all dead ends (nodes of
+ *      degree <= 1 that are neither start nor end) simultaneously across the entire
+ *      maze using GPU threads.
+ *    - In a tree-structured maze, iteratively updating local 4-neighborhood degrees
+ *      prunes unviable branches backward from their leaves until reaching a fixed point.
+ *    - The surviving path cells represent the exact, unique solution path.
+ *
+ * 2. HARDWARE & MAZE ADAPTIVE EXECUTION:
+ *    - Kernel Batching: Invokes computeGpuAdaptiveConfig() to adaptively determine
+ *      the number of iterations to execute per batch before reading back change counts.
+ *      Batch size scales proportionally with maze diameter to amortize kernel launch
+ *      and PCIe sync overhead, while throttling under high VRAM pressure to prevent
+ *      GPU driver watchdog / TDR timeouts.
+ *    - Workgroup Tuning: Automatically aligns workgroups with GPU compute units
+ *      and warp/wavefront boundaries (multiples of 32 threads).
+ *
+ * 3. EXECUTION MODES:
+ *    - BITPACKED: Packs 32 cells per uint32 word (0.125 bytes/cell). Uses a 4-bitplane
+ *      parallel full-adder to evaluate degrees of 32 cells in parallel using bitwise
+ *      Boolean logic (~curr & ~carry), cutting VRAM usage by 8x.
+ *    - SUBSTEPPING / COALESCED: Tiled shared-memory halo kernels with 2D thread blocks.
+ * =============================================================================
+ */
+
 #include "GpuDeadEndFillingSolver.hpp"
 
 #include "utilities/GpuUtils.hpp"
@@ -579,10 +609,20 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
         k_B.setArg(7, this->end.first);
         k_B.setArg(8, this->end.second);
 
+        // Compute adaptive GPU execution parameters (batch size, workgroup geometry)
+        const auto adaptive_cfg = computeGpuAdaptiveConfig(
+            pimpl->gpu.device,
+            this->height,
+            this->width,
+            sizeof(uint8_t),
+            this->user_batch_size
+        );
+        this->config_rationale = adaptive_cfg.rationale;
+        const int BATCH_SIZE = (this->user_batch_size > 0) ? this->user_batch_size : adaptive_cfg.batch_size;
+
         total_iterations = 0;
         int changes = 0;
         const int zero = 0;
-        constexpr int BATCH_SIZE = 128;
 
         while (true) {
             pimpl->gpu.queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);

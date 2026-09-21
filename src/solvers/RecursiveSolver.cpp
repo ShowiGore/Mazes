@@ -1,5 +1,35 @@
-#include "RecursiveSolver.hpp"
+/**
+ * =============================================================================
+ * ITERATIVE DEPTH-FIRST SEARCH (DFS) SOLVER ("RECURSIVE")
+ * =============================================================================
+ *
+ * 1. ALGORITHM STRATEGY:
+ *    - Depth-First Traversal with Backtracking: Explores each corridor deeply until
+ *      encountering a junction, dead end, or the destination. Upon hitting a dead end,
+ *      backtracks along the path stack to the last branch with unvisited neighbors.
+ *
+ * 2. STACK OVERFLOW PREVENTION (ITERATIVE VS RECURSIVE):
+ *    - Although named "RecursiveSolver" for historical reasons, the algorithm is
+ *      implemented iteratively using an explicit heap-allocated stack.
+ *    - On large mazes (e.g. 131,073 x 131,073), solution paths can exceed millions
+ *      of steps. Function call-stack recursion would instantly exhaust the standard
+ *      OS thread stack limit (typically 8 MB) and trigger a fatal SIGSEGV.
+ *
+ * 3. ADAPTIVE CONTAINER PRE-ALLOCATION:
+ *    - By default, std::stack uses std::deque, which allocates nodes in fragmented
+ *      chunks (typically 512 bytes).
+ *    - We use std::stack<Direction, std::vector<Direction>> with an adaptive reserve:
+ *      cap = min(total_cells / 4, max(1024, (H + W) * 2))
+ *      derived from the theoretical spanning tree diameter.
+ *    - This provides contiguous memory layout, eliminates page allocation stalls,
+ *      and ensures optimal CPU memory locality.
+ * =============================================================================
+ */
 
+#include "RecursiveSolver.hpp"
+#include <vector>
+#include <stack>
+#include <algorithm>
 
 bool RecursiveSolver::solve(const Maze &maze_object) { //dfs
 
@@ -14,8 +44,21 @@ bool RecursiveSolver::solve(const Maze &maze_object) { //dfs
     this->visited.assign(this->height, std::vector<bool>(this->width, false));
     this->solution.assign(this->height, std::vector<bool>(this->width, false));
 
+    const size_t total_cells = static_cast<size_t>(this->height) * this->width;
+
+    // Adaptive stack container sizing:
+    // Sized based on theoretical spanning tree diameter. Pre-allocating capacity
+    // eliminates repeated dynamic reallocations during deep traversal.
+    const size_t adaptive_stack_cap = std::min<size_t>(
+        total_cells / 4,
+        std::max<size_t>(1024ULL, static_cast<size_t>(this->height + this->width) * 2)
+    );
+
+    std::vector<Direction> step_container;
+    step_container.reserve(adaptive_stack_cap);
+    std::stack<Direction, std::vector<Direction>> steps(std::move(step_container));
+
     constexpr Direction directions[] = {UP, RIGHT, DOWN, LEFT};
-    std::stack<Direction> steps;
 
     std::pair <int, int> current = start;
     visited[current.first][current.second] = true;

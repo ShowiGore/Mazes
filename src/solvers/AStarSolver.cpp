@@ -1,3 +1,33 @@
+/**
+ * =============================================================================
+ * A* SEARCH SOLVER (STANDARD AND WEIGHTED)
+ * =============================================================================
+ *
+ * 1. ALGORITHM STRATEGY:
+ *    - Heuristic Search with Cost Balancing: Evaluates nodes using f(n) = g(n) + w * h(n),
+ *      where g(n) is the exact cumulative step cost from start, and h(n) is the
+ *      L1 Manhattan distance heuristic:
+ *          h(r, c) = |r - end_r| + |c - end_c|
+ *
+ * 2. THEORETICAL OPTIMALITY GUARANTEES:
+ *    - Admissibility: On a 4-connected grid with uniform step cost c(u, v) = 1,
+ *      the Manhattan distance is strictly admissible (h(n) <= d*(n, goal)) because
+ *      no path can reach the goal in fewer steps than the orthogonal coordinate delta.
+ *    - Consistency (Monotonicity): The heuristic satisfies the triangle inequality:
+ *          h(u) <= c(u, v) + h(v) = 1 + h(v)
+ *      Consistency guarantees that the first time any node is extracted from the open
+ *      set, its g_score is guaranteed to be optimal. No closed node re-expansion is needed.
+ *    - Weighted A* Trade-off: When heuristic_weight w > 1, the algorithm becomes
+ *      epsilon-admissible (solution cost <= w * C*), dramatically reducing the number of
+ *      expanded states by biasing search progress aggressively toward the goal.
+ *
+ * 3. ADAPTIVE CONTAINER PRE-ALLOCATION:
+ *    - The open_set priority queue backing vector is pre-allocated adaptively:
+ *      cap = min(total_cells / 2, max(1024, (H + W) * 4))
+ *    - This eliminates memory reallocation stalls during frontier expansion.
+ * =============================================================================
+ */
+
 #include "AStarSolver.hpp"
 #include <queue>
 #include <vector>
@@ -31,6 +61,8 @@ bool AStarSolver::solve_impl(const Maze &maze_object) { // A*
     this->solution.assign(this->height, std::vector<bool>(this->width, false));
     this->visited.assign(this->height, std::vector<bool>(this->width, false));
 
+    const size_t total_cells = static_cast<size_t>(this->height) * this->width;
+
     // Data structures for A*
     // g_score stores the cost of the cheapest path from start to node currently known
     std::vector<std::vector<int>> g_score(this->height, std::vector<int>(this->width, std::numeric_limits<int>::max()));
@@ -38,8 +70,18 @@ bool AStarSolver::solve_impl(const Maze &maze_object) { // A*
     // Parent grid to reconstruct the path
     std::vector<std::vector<std::pair<int, int>>> parent(this->height, std::vector<std::pair<int, int>>(this->width, {-1, -1}));
 
-    // Open Set: Min-priority queue based on f_score
-    std::priority_queue<AStarNode, std::vector<AStarNode>, std::greater<AStarNode>> open_set;
+    // Adaptive open set container sizing:
+    // Sized to accommodate the frontier expansion without frequent reallocations.
+    const size_t adaptive_frontier_cap = std::min<size_t>(
+        total_cells / 2,
+        std::max<size_t>(1024ULL, static_cast<size_t>(this->height + this->width) * 4)
+    );
+
+    std::vector<AStarNode> open_container;
+    open_container.reserve(adaptive_frontier_cap);
+    std::priority_queue<AStarNode, std::vector<AStarNode>, std::greater<AStarNode>> open_set(
+        std::greater<AStarNode>(), std::move(open_container)
+    );
 
     // Initialize start node
     const int start_h = heuristic(start.first, start.second, end.first, end.second);

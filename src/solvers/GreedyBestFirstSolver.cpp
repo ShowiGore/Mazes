@@ -1,8 +1,34 @@
+/**
+ * =============================================================================
+ * GREEDY BEST-FIRST SEARCH (GBFS) SOLVER
+ * =============================================================================
+ *
+ * 1. ALGORITHM STRATEGY:
+ *    - Heuristic Priority Search: Explores candidate path nodes in order of
+ *      minimum estimated distance to the destination, using the L1 Manhattan metric:
+ *          h(r, c) = |r - end_r| + |c - end_c|
+ *    - In a 4-connected planar grid, the L1 metric represents the geodesic distance
+ *      lower-bound in the absence of obstacles, providing optimal search guidance.
+ *    - By focusing entirely on h without accumulating step costs (unlike A*), GBFS
+ *      dramatically accelerates convergence towards the goal in large tree mazes.
+ *
+ * 2. ADAPTIVE CONTAINER ALLOCATION:
+ *    - The priority queue backing vector is pre-allocated with an adaptive capacity:
+ *      cap = min(total_cells / 2, max(1024, (H + W) * 4))
+ *    - This eliminates dynamic vector growth overhead during frontier exploration.
+ *
+ * 3. 1-BYTE DIRECTION-COMPRESSED PARENT TRACKING:
+ *    - Replaces standard 8-byte coordinate pairs with a 1-byte direction (0..3)
+ *      in a flat 1D array. Backtracking from destination to start runs in exact O(L) time.
+ * =============================================================================
+ */
+
 #include "GreedyBestFirstSolver.hpp"
 #include <queue>
 #include <vector>
 #include <cmath>
 #include <cstdint>
+#include <algorithm>
 
 struct GBFSNode {
     int r, c;
@@ -38,8 +64,18 @@ bool GreedyBestFirstSolver::solve(const Maze &maze_object) {
     constexpr int d_row[4] = {-1, 0, 1, 0};
     constexpr int d_col[4] = {0, 1, 0, -1};
 
-    // Min-priority queue based purely on heuristic h
-    std::priority_queue<GBFSNode, std::vector<GBFSNode>, std::greater<GBFSNode>> open_set;
+    // Adaptive frontier container sizing:
+    // Pre-allocates priority queue capacity to eliminate reallocation latency.
+    const size_t adaptive_frontier_cap = std::min<size_t>(
+        total_cells / 2,
+        std::max<size_t>(1024ULL, static_cast<size_t>(this->height + this->width) * 4)
+    );
+
+    std::vector<GBFSNode> open_container;
+    open_container.reserve(adaptive_frontier_cap);
+    std::priority_queue<GBFSNode, std::vector<GBFSNode>, std::greater<GBFSNode>> open_set(
+        std::greater<GBFSNode>(), std::move(open_container)
+    );
 
     const int start_h = manhattan(this->start.first, this->start.second, this->end.first, this->end.second);
     open_set.push({this->start.first, this->start.second, start_h});
