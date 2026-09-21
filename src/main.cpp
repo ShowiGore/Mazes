@@ -16,6 +16,7 @@
 #include "generators/AldousBroderMaze.hpp"
 #include "generators/RecursiveDivisionMaze.hpp"
 #include "generators/FractalRecursiveDivisionMaze.hpp"
+#include "generators/UnbiasedEllerMaze.hpp"
 
 // Solvers
 #include "solvers/Solver.hpp"
@@ -73,6 +74,7 @@ void print_help(const char* prog_name) {
               << "                               houston             (Aldous-Broder + Wilson hybrid)\n"
               << "                               wilson              (Wilson's LERW algorithm)\n"
               << "                               aldous-broder       (Aldous-Broder algorithm)\n"
+              << "                               eller               (Unbiased / Isotropic Eller's O(W) memory)\n"
               << "                               recursive-division  (Recursive Division)\n"
               << "                               fractal             (Fractal Recursive Division)\n"
               << "  -a, --alpha <float>        Transition threshold for Houston (default: 0.333)\n\n"
@@ -243,6 +245,8 @@ int main(int argc, char* argv[]) {
             maze = std::make_shared<WilsonsMaze>(config.height, config.width, config.seed);
         } else if (config.generator == "aldous-broder") {
             maze = std::make_shared<AldousBroderMaze>(config.height, config.width, config.seed);
+        } else if (config.generator == "eller" || config.generator == "unbiased-eller") {
+            maze = std::make_shared<UnbiasedEllerMaze>(config.height, config.width, config.seed);
         } else if (config.generator == "recursive-division") {
             auto r_maze = std::make_shared<RecursiveDivisionMaze>(config.height, config.width, config.seed);
             r_maze->setGeneratorName("recursive-division");

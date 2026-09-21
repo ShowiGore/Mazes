@@ -432,14 +432,18 @@ bool ParallelPruningDfsSolver::solve(const Maze &maze) {
         }
     }
 
-    // Mark visited cells for visualization
+    // Mark visited cells for visualization:
+    // Marks both cells explored during DFS and all pruned dead-end branches so the
+    // resulting PNG clearly distinguishes the pruned dead-end tree (red) from the solution (green).
     #pragma omp parallel for schedule(static)
     for (int r = 0; r < H; ++r) {
         const size_t row_offset = static_cast<size_t>(r) * words_per_row;
         for (int c = 0; c < W; ++c) {
             const size_t idx = row_offset + (c / 64);
             const uint64_t bit = 1ULL << (c % 64);
-            if ((visited_fwd[idx] & bit) || (visited_bwd[idx] & bit)) {
+            const bool is_dfs_visited = ((visited_fwd[idx] & bit) || (visited_bwd[idx] & bit));
+            const bool is_pruned = (!maze_grid[r][c] && !(pruned_grid[idx] & bit));
+            if (is_dfs_visited || is_pruned) {
                 this->visited[r][c] = true;
             }
         }
