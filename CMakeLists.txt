@@ -8,6 +8,10 @@ add_compile_definitions(PROJECT_ROOT_DIR="${CMAKE_SOURCE_DIR}")
 
 # Find the underlying C library (required by png++)
 find_package(PNG REQUIRED)
+find_package(OpenCL REQUIRED)
+
+add_compile_definitions(CL_TARGET_OPENCL_VERSION=300)
+add_compile_definitions(CL_HPP_TARGET_OPENCL_VERSION=300)
 
 # Recursively find all .cpp and .hpp files inside 'src' folder
 file(GLOB_RECURSE PROJECT_SOURCES "src/*.cpp")
@@ -24,7 +28,8 @@ target_include_directories(Mazes PRIVATE src)
 target_include_directories(Mazes PRIVATE
         include/png++-0.2.9  # Local header-only lib
         ${PNG_INCLUDE_DIR}   # System libpng
+        ${OpenCL_INCLUDE_DIRS}
 )
 
 # Link dependencies
-target_link_libraries(Mazes PRIVATE ${PNG_LIBRARIES})
+target_link_libraries(Mazes PRIVATE ${PNG_LIBRARIES} OpenCL::OpenCL)

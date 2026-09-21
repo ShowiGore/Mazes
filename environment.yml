@@ -7,12 +7,18 @@ dependencies:
   - cxx-compiler
   - cmake >=3.25
   - make
+  - pkg-config
 
   # Libraries for Image Processing & Compression
   - libpng
   - zlib
 
   # OpenCL Vendor-Agnostic GPU/CPU Development
-  - ocl-icd
   - opencl-headers
+  - ocl-icd
+  - clinfo
+  - clhpp
   - pocl
+
+variables:
+  OCL_ICD_VENDORS: /etc/OpenCL/vendors

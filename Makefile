@@ -117,7 +117,7 @@ help:
 	@echo "   GEN=<name>               Generator (REQUIRED for generation):"
 	@echo "                              houston, wilson, aldous-broder, recursive-division, fractal"
 	@echo "   SOLVERS=<list>           Solvers (comma-separated, 'all', or 'none'):"
-	@echo "                              bidir-gbfs, gbfs, dead-end, astar, recursive, all"
+	@echo "                              bidir-gbfs, gbfs, dead-end, gpu-dead-end, astar, recursive, all"
 	@echo "   H=<int>, W=<int>         Height and Width (default: 8193)"
 	@echo "   SEED=<uint>              Random seed (default: random)"
 	@echo "   ALPHA=<float>            Transition threshold for Houston (default: 0.333)"
