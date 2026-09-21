@@ -5,12 +5,19 @@
 #include <string>
 #include <memory>
 
+enum class GpuDeadEndMode {
+    BITPACKED,    // 32-cell SIMD bitplanes (lowest VRAM & bandwidth, fastest)
+    SUBSTEPPING,  // Shared memory halo R=2 (2 steps per global VRAM roundtrip)
+    COALESCED     // Coalesced 32x8 1-step kernel
+};
+
 /**
  * @brief GPU Dead-End Filling Solver (OpenCL Vendor-Agnostic)
  *
- * Parallel cellular automaton running on OpenCL (NVIDIA, AMD, Intel, Apple, POCL).
- * Iteratively prunes all dead-end branches in parallel until convergence,
- * leaving exclusively the unique solution path between Start and End.
+ * Supports three execution modes:
+ * - BITPACKED: 32-cell SIMD words using parallel bitplane full-adders.
+ * - SUBSTEPPING: Multi-step cellular automaton in shared memory (halo R=2).
+ * - COALESCED: Natural 32x8 warp-coalesced 1-step kernel.
  */
 class GpuDeadEndFillingSolver : public Solver {
 private:
@@ -19,8 +26,8 @@ private:
     std::string selected_device_name;
     size_t total_iterations = 0;
     bool is_initialized = false;
+    GpuDeadEndMode mode = GpuDeadEndMode::BITPACKED;
 
-    // Private implementation struct to avoid leaking OpenCL headers in public API
     struct Impl;
     std::unique_ptr<Impl> pimpl;
 
@@ -33,7 +40,6 @@ public:
     GpuDeadEndFillingSolver(GpuDeadEndFillingSolver&&) noexcept;
     GpuDeadEndFillingSolver& operator=(GpuDeadEndFillingSolver&&) noexcept;
 
-    // Non-copyable due to OpenCL context handles
     GpuDeadEndFillingSolver(const GpuDeadEndFillingSolver&) = delete;
     GpuDeadEndFillingSolver& operator=(const GpuDeadEndFillingSolver&) = delete;
 
@@ -41,6 +47,9 @@ public:
     [[nodiscard]] std::string getDeviceName() const { return selected_device_name; }
     [[nodiscard]] std::string getPlatformName() const { return selected_platform_name; }
     [[nodiscard]] size_t getIterationCount() const { return total_iterations; }
+
+    void setMode(GpuDeadEndMode new_mode) { mode = new_mode; }
+    [[nodiscard]] GpuDeadEndMode getMode() const { return mode; }
 
     bool solve(const Maze &maze) override;
 };
