@@ -34,11 +34,11 @@ void HoustonMaze::init() {
 }
 
 void HoustonMaze::generate() {
-    const int num_cell_rows = height / 2;
-    const int num_cell_cols = width / 2;
-    const int total_cells = num_cell_rows * num_cell_cols;
+    const size_t num_cell_rows = static_cast<size_t>(height) / 2;
+    const size_t num_cell_cols = static_cast<size_t>(width) / 2;
+    const size_t total_cells = num_cell_rows * num_cell_cols;
 
-    if (total_cells <= 0) {
+    if (total_cells == 0) {
         return;
     }
 
@@ -68,32 +68,32 @@ void HoustonMaze::generate() {
     };
 
     // Calculate threshold cell count for switching from Aldous-Broder to Wilson.
-    // If using the theoretical alpha (1/3), use exact integer division; otherwise use float math.
-    const int threshold_cells = (switch_threshold == THEORETICAL_ALPHA)
-        ? std::max(1, total_cells / 3)
-        : std::max(1, static_cast<int>(total_cells * switch_threshold));
+    const size_t threshold_cells = (switch_threshold == THEORETICAL_ALPHA)
+        ? std::max<size_t>(1, total_cells / 3)
+        : std::max<size_t>(1, static_cast<size_t>(static_cast<double>(total_cells) * switch_threshold));
 
     // =========================================================================
     // PHASE 1: Aldous-Broder Algorithm (Early Game Speed)
     // Run simple random walk until threshold_cells have been added to the tree.
     // =========================================================================
-    int curr_r = randomInRange(0, num_cell_rows - 1);
-    int curr_c = randomInRange(0, num_cell_cols - 1);
+    int curr_r = randomInRange(0, static_cast<int>(num_cell_rows - 1));
+    int curr_c = randomInRange(0, static_cast<int>(num_cell_cols - 1));
 
-    in_tree[curr_r * num_cell_cols + curr_c] = 1;
+    in_tree[static_cast<size_t>(curr_r) * num_cell_cols + curr_c] = 1;
     maze[2 * curr_r + 1][2 * curr_c + 1] = PATH;
-    int visited_cells = 1;
+    size_t visited_cells = 1;
 
     while (visited_cells < threshold_cells) {
         const int dir = next_random_dir();
         const int next_r = curr_r + d_row[dir];
         const int next_c = curr_c + d_col[dir];
 
-        if (next_r < 0 || next_r >= num_cell_rows || next_c < 0 || next_c >= num_cell_cols) {
+        if (next_r < 0 || static_cast<size_t>(next_r) >= num_cell_rows ||
+            next_c < 0 || static_cast<size_t>(next_c) >= num_cell_cols) {
             continue;
         }
 
-        const int next_idx = next_r * num_cell_cols + next_c;
+        const size_t next_idx = static_cast<size_t>(next_r) * num_cell_cols + next_c;
         if (!in_tree[next_idx]) {
             in_tree[next_idx] = 1;
 
@@ -113,22 +113,23 @@ void HoustonMaze::generate() {
     // Seamlessly transition: the tree T_0 built by Aldous-Broder acts as the
     // initial target set. We use Loop-Erased Random Walks (LERW) for remaining cells.
     // =========================================================================
-    for (int cell_idx = 0; cell_idx < total_cells; ++cell_idx) {
+    for (size_t cell_idx = 0; cell_idx < total_cells; ++cell_idx) {
         if (in_tree[cell_idx]) {
             continue;
         }
 
         // --- Step 2A: Loop-Erased Random Walk ---
-        int walk_idx = cell_idx;
-        int walk_r = walk_idx / num_cell_cols;
-        int walk_c = walk_idx % num_cell_cols;
+        size_t walk_idx = cell_idx;
+        int walk_r = static_cast<int>(walk_idx / num_cell_cols);
+        int walk_c = static_cast<int>(walk_idx % num_cell_cols);
 
         while (!in_tree[walk_idx]) {
             const int dir = next_random_dir();
             const int next_r = walk_r + d_row[dir];
             const int next_c = walk_c + d_col[dir];
 
-            if (next_r < 0 || next_r >= num_cell_rows || next_c < 0 || next_c >= num_cell_cols) {
+            if (next_r < 0 || static_cast<size_t>(next_r) >= num_cell_rows ||
+                next_c < 0 || static_cast<size_t>(next_c) >= num_cell_cols) {
                 continue;
             }
 
@@ -137,13 +138,13 @@ void HoustonMaze::generate() {
 
             walk_r = next_r;
             walk_c = next_c;
-            walk_idx = next_r * num_cell_cols + next_c;
+            walk_idx = static_cast<size_t>(next_r) * num_cell_cols + next_c;
         }
 
         // --- Step 2B: Retrace and Carve into the Tree ---
-        int path_idx = cell_idx;
-        int path_r = path_idx / num_cell_cols;
-        int path_c = path_idx % num_cell_cols;
+        size_t path_idx = cell_idx;
+        int path_r = static_cast<int>(path_idx / num_cell_cols);
+        int path_c = static_cast<int>(path_idx % num_cell_cols);
 
         while (!in_tree[path_idx]) {
             const int dir = next_dir[path_idx];
@@ -156,7 +157,7 @@ void HoustonMaze::generate() {
 
             path_r = next_r;
             path_c = next_c;
-            path_idx = next_r * num_cell_cols + next_c;
+            path_idx = static_cast<size_t>(next_r) * num_cell_cols + next_c;
         }
     }
 }
