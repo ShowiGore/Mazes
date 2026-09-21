@@ -1,3 +1,32 @@
-# Project exclude paths
-/cmake-build-debug/
+# Build artifacts and directories
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile.old
+*.o
+*.a
+*.so
+Mazes
+
+# IDE and Editor configurations
+.idea/
+.vscode/
+*.iml
+
+# Generated mazes, solutions, and media
+generated_mazes/
 *.png
+*.maze
+*.sol
+*.bin
+
+# Python / Conda / Environments
+.conda/
+*.pyc
+__pycache__/
+
+# OS and system files
+.DS_Store
+Thumbs.db
