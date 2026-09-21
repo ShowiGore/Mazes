@@ -198,7 +198,7 @@ std::string Maze::save_maze(const std::string &custom_filepath) {
 
     std::string fullPath = custom_filepath;
     if (fullPath.empty()) {
-        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes" / "images";
         std::filesystem::create_directories(dir);
         fullPath = (dir / std::format("{}_{}_{}_{}.png", seed, height, width, generator_name)).string();
     }
@@ -210,7 +210,7 @@ std::string Maze::save_maze(const std::string &custom_filepath) {
 std::string Maze::save_binary(const std::string &custom_filepath) const {
     std::string fullPath = custom_filepath;
     if (fullPath.empty()) {
-        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes" / "binary";
         std::filesystem::create_directories(dir);
         fullPath = (dir / std::format("{}_{}_{}_{}.maze", seed, height, width, generator_name)).string();
     }

@@ -35,7 +35,7 @@ std::string Solver::save_solution(const Maze &maze_object, const std::string &cu
 
     std::string fullPath = custom_filepath;
     if (fullPath.empty()) {
-        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes" / "images";
         std::filesystem::create_directories(dir);
         fullPath = (dir / std::format("{}_{}_{}_{}_{}.png",
                                       maze_object.getSeed(),
@@ -52,7 +52,7 @@ std::string Solver::save_solution(const Maze &maze_object, const std::string &cu
 std::string Solver::save_binary_solution(const Maze &maze_object, const std::string &custom_filepath) const {
     std::string fullPath = custom_filepath;
     if (fullPath.empty()) {
-        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes" / "binary";
         std::filesystem::create_directories(dir);
         fullPath = (dir / std::format("{}_{}_{}_{}_{}.sol",
                                       maze_object.getSeed(),

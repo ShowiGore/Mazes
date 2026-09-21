@@ -86,7 +86,7 @@ benchmark: build
 # Solve an existing binary maze
 solve: build
 	@if [ -z "$(LOAD)" ]; then \
-		echo "Error: LOAD=<path_to_maze> required (e.g. make solve LOAD=generated_mazes/...maze SOLVERS=bidir-gbfs)"; \
+		echo "Error: LOAD=<path_to_maze> required (e.g. make solve LOAD=generated_mazes/binary/...maze SOLVERS=bidir-gbfs)"; \
 		exit 1; \
 	fi; \
 	CMD="$(BIN) --load $(LOAD)"; \
@@ -121,13 +121,13 @@ help:
 	@echo "   H=<int>, W=<int>         Height and Width (default: 8193)"
 	@echo "   SEED=<uint>              Random seed (default: random)"
 	@echo "   ALPHA=<float>            Transition threshold for Houston (default: 0.333)"
-	@echo "   PNG=1                    Save PNG image(s) to generated_mazes/"
-	@echo "   BIN_SAVE=1               Save compact binary .maze / .sol file(s)"
+	@echo "   PNG=1                    Save PNG image(s) to generated_mazes/images/"
+	@echo "   BIN_SAVE=1               Save compact binary .maze / .sol file(s) to generated_mazes/binary/"
 	@echo "   LOAD=<path>              Path to .maze file for decoupled solving"
 	@echo ""
 	@echo " Examples:"
 	@echo "   make generate GEN=houston H=2001 W=2001 PNG=1"
 	@echo "   make run GEN=houston H=2001 W=2001 SOLVERS=bidir-gbfs PNG=1"
 	@echo "   make benchmark GEN=wilson H=1001 W=1001"
-	@echo "   make solve LOAD=generated_mazes/42_2001_2001_houston.maze SOLVERS=bidir-gbfs"
+	@echo "   make solve LOAD=generated_mazes/binary/42_2001_2001_houston.maze SOLVERS=bidir-gbfs"
 	@echo "=============================================================================="

@@ -55,8 +55,8 @@ void print_help(const char* prog_name) {
               << "  -H, --height <int>         Maze height (default: 8193, must be odd >= 3)\n"
               << "  -W, --width <int>          Maze width (default: 8193, must be odd >= 3)\n"
               << "  -s, --seed <uint>          Random seed (default: random)\n"
-              << "  --png                      Save PNG image(s) to generated_mazes/\n"
-              << "  --bin                      Save compact binary .maze / .sol file(s)\n\n"
+              << "  --png                      Save PNG image(s) to generated_mazes/images/\n"
+              << "  --bin                      Save compact binary .maze / .sol file(s) to generated_mazes/binary/\n\n"
               << "Generator Options (Required unless --load is specified):\n"
               << "  -g, --gen <name>           Generator to use:\n"
               << "                               houston             (Aldous-Broder + Wilson hybrid)\n"
@@ -80,7 +80,7 @@ void print_help(const char* prog_name) {
               << "  " << prog_name << " -g houston\n"
               << "  " << prog_name << " -g houston -H 2001 -W 2001 -s 42 --solvers bidir-gbfs --png\n"
               << "  " << prog_name << " -g wilson -H 1001 -W 1001 --solvers all\n"
-              << "  " << prog_name << " --load generated_mazes/42_2001_2001_houston.maze --solvers dead-end\n";
+              << "  " << prog_name << " --load generated_mazes/binary/42_2001_2001_houston.maze --solvers dead-end\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -186,7 +186,8 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Save PNG:           " << (config.save_png ? "YES" : "NO [default]") << "\n"
               << "Save Binary:        " << (config.save_bin ? "YES" : "NO [default]") << "\n"
-              << "Output Directory:   generated_mazes/\n"
+              << "Output Images:      generated_mazes/images/\n"
+              << "Output Binary:      generated_mazes/binary/\n"
               << "============================================================\n\n";
 
     TimeProfiler tp;
