@@ -27,6 +27,8 @@ private:
     size_t total_iterations = 0;
     bool is_initialized = false;
     GpuDeadEndMode mode = GpuDeadEndMode::BITPACKED;
+    int user_batch_size = -1;
+    std::string config_rationale;
 
     struct Impl;
     std::unique_ptr<Impl> pimpl;
@@ -47,9 +49,13 @@ public:
     [[nodiscard]] std::string getDeviceName() const { return selected_device_name; }
     [[nodiscard]] std::string getPlatformName() const { return selected_platform_name; }
     [[nodiscard]] size_t getIterationCount() const { return total_iterations; }
+    [[nodiscard]] std::string getConfigRationale() const { return config_rationale; }
 
     void setMode(GpuDeadEndMode new_mode) { mode = new_mode; }
     [[nodiscard]] GpuDeadEndMode getMode() const { return mode; }
+
+    void setBatchSize(int batch) { user_batch_size = batch; }
+    [[nodiscard]] int getBatchSize() const { return user_batch_size; }
 
     bool solve(const Maze &maze) override;
 };

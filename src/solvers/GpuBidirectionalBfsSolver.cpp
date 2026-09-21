@@ -3,6 +3,7 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 300
 #define CL_HPP_ENABLE_EXCEPTIONS
 #include <CL/opencl.hpp>
+#include "GpuUtils.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -256,8 +257,20 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
         cl::Buffer buf_state(pimpl->context, CL_MEM_READ_WRITE, total_cells * sizeof(int));
         pimpl->queue.enqueueWriteBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
 
+        // Compute adaptive GPU execution parameters (batch size, workgroup, frontier capacity)
+        const auto adaptive_cfg = computeGpuAdaptiveConfig(
+            pimpl->device,
+            this->height,
+            this->width,
+            sizeof(int),
+            this->user_batch_size
+        );
+        this->config_rationale = adaptive_cfg.rationale;
+        const int BATCH_SIZE = adaptive_cfg.batch_size;
+        const size_t LOCAL_WORKGROUP_SIZE = adaptive_cfg.workgroup_size;
+        const size_t FRONTIER_CAP = adaptive_cfg.frontier_capacity;
+
         // Dynamic frontier capacity
-        const size_t FRONTIER_CAP = std::min<size_t>(1000000, total_cells / 4 + 1024);
         cl::Buffer buf_f_curr(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
         cl::Buffer buf_f_next(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
         cl::Buffer buf_b_curr(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
@@ -287,9 +300,6 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
         int collision_found = 0;
         int cell_A = -1;
         int cell_B = -1;
-
-        constexpr int BATCH_SIZE = 128;
-        constexpr size_t LOCAL_WORKGROUP_SIZE = 512;
 
         pimpl->kernel_batched.setArg(0, buf_f_curr);
         pimpl->kernel_batched.setArg(1, buf_f_next);

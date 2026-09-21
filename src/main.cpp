@@ -50,6 +50,9 @@ struct Config {
     bool save_png = false;
     bool save_bin = false;
     std::string load_filepath = "";
+
+    int batch_size = -1;
+    bool batch_specified = false;
 };
 
 void print_help(const char* prog_name) {
@@ -59,6 +62,7 @@ void print_help(const char* prog_name) {
               << "  -H, --height <int>         Maze height (default: 8193, must be odd >= 3)\n"
               << "  -W, --width <int>          Maze width (default: 8193, must be odd >= 3)\n"
               << "  -s, --seed <uint>          Random seed (default: random)\n"
+              << "  -b, --batch <int>          GPU batch size override (default: auto-tuned based on maze & GPU)\n"
               << "  --png                      Save PNG image(s) to generated_mazes/images/\n"
               << "  --bin                      Save compact binary .maze / .sol file(s) to generated_mazes/binary/\n\n"
               << "Generator Options (Required unless --load is specified):\n"
@@ -112,6 +116,9 @@ int main(int argc, char* argv[]) {
         } else if ((arg == "-s" || arg == "--seed") && i + 1 < argc) {
             config.seed = static_cast<unsigned int>(std::stoul(argv[++i]));
             config.seed_specified = true;
+        } else if ((arg == "-b" || arg == "--batch") && i + 1 < argc) {
+            config.batch_size = std::stoi(argv[++i]);
+            config.batch_specified = true;
         } else if ((arg == "-g" || arg == "--gen") && i + 1 < argc) {
             config.generator = argv[++i];
             std::transform(config.generator.begin(), config.generator.end(), config.generator.begin(), ::tolower);
@@ -188,6 +195,12 @@ int main(int argc, char* argv[]) {
         for (size_t i = 0; i < config.solvers.size(); ++i) {
             std::cout << config.solvers[i] << (i + 1 < config.solvers.size() ? ", " : " [specified]\n");
         }
+    }
+
+    if (config.batch_specified) {
+        std::cout << "GPU Batch Size:     " << config.batch_size << " [specified override]\n";
+    } else {
+        std::cout << "GPU Batch Size:     auto (adaptive to maze dimensions, VRAM & GPU workgroups)\n";
     }
 
     std::cout << "Save PNG:           " << (config.save_png ? "YES" : "NO [default]") << "\n"
@@ -285,11 +298,17 @@ int main(int argc, char* argv[]) {
         } else if (solver_name == "dead-end") {
             solver = std::make_unique<DeadEndFillingSolver>();
         } else if (solver_name == "gpu-dead-end" || solver_name == "gpu" || solver_name == "opencl") {
-            solver = std::make_unique<GpuDeadEndFillingSolver>();
+            auto s = std::make_unique<GpuDeadEndFillingSolver>();
+            if (config.batch_specified) s->setBatchSize(config.batch_size);
+            solver = std::move(s);
         } else if (solver_name == "gpu-bidir-bfs" || solver_name == "gpu-bfs" || solver_name == "gpu-bidirectional-bfs") {
-            solver = std::make_unique<GpuBidirectionalBfsSolver>();
+            auto s = std::make_unique<GpuBidirectionalBfsSolver>();
+            if (config.batch_specified) s->setBatchSize(config.batch_size);
+            solver = std::move(s);
         } else if (solver_name == "gpu-bidir-gbfs" || solver_name == "gpu-gbfs" || solver_name == "gpu-beam-gbfs") {
-            solver = std::make_unique<GpuBidirectionalGbfsSolver>();
+            auto s = std::make_unique<GpuBidirectionalGbfsSolver>();
+            if (config.batch_specified) s->setBatchSize(config.batch_size);
+            solver = std::move(s);
         } else if (solver_name == "gpu-hpa" || solver_name == "gpu-hierarchical" || solver_name == "hpa") {
             solver = std::make_unique<GpuHierarchicalPathfindingSolver>();
         } else if (solver_name == "astar") {
@@ -315,15 +334,18 @@ int main(int argc, char* argv[]) {
         }
         if (auto* gpu = dynamic_cast<GpuDeadEndFillingSolver*>(solver.get())) {
             std::cout << "GPU Device:     " << gpu->getDeviceName() << " (" << gpu->getPlatformName() << ")\n";
+            std::cout << "GPU Config:     " << gpu->getConfigRationale() << "\n";
             std::cout << "GPU Iterations: " << gpu->getIterationCount() << std::endl;
         }
         if (auto* gpu_bfs = dynamic_cast<GpuBidirectionalBfsSolver*>(solver.get())) {
             std::cout << "GPU Device:     " << gpu_bfs->getDeviceName() << " (" << gpu_bfs->getPlatformName() << ")\n";
+            std::cout << "GPU Config:     " << gpu_bfs->getConfigRationale() << "\n";
             std::cout << "Frontier Steps: " << gpu_bfs->getExpansionsCount() << "\n";
             std::cout << "Cells visited:  " << gpu_bfs->getVisitedCount() << std::endl;
         }
         if (auto* gpu_gbfs = dynamic_cast<GpuBidirectionalGbfsSolver*>(solver.get())) {
             std::cout << "GPU Device:     " << gpu_gbfs->getDeviceName() << " (" << gpu_gbfs->getPlatformName() << ")\n";
+            std::cout << "GPU Config:     " << gpu_gbfs->getConfigRationale() << "\n";
             std::cout << "Frontier Steps: " << gpu_gbfs->getExpansionsCount() << "\n";
             std::cout << "Cells visited:  " << gpu_gbfs->getVisitedCount() << std::endl;
         }

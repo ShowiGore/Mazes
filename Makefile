@@ -16,6 +16,7 @@ ALPHA ?=
 PNG ?= 0
 BIN_SAVE ?= 0
 LOAD ?=
+BATCH ?=
 
 .PHONY: all build clean run generate benchmark solve help
 
@@ -53,6 +54,7 @@ run: build
 		if [ -n "$(ALPHA)" ]; then CMD="$$CMD -a $(ALPHA)"; fi; \
 	fi; \
 	if [ -n "$(SOLVERS)" ]; then CMD="$$CMD --solvers $(SOLVERS)"; fi; \
+	if [ -n "$(BATCH)" ]; then CMD="$$CMD --batch $(BATCH)"; fi; \
 	if [ "$(PNG)" = "1" ]; then CMD="$$CMD --png"; fi; \
 	if [ "$(BIN_SAVE)" = "1" ]; then CMD="$$CMD --bin"; fi; \
 	$$CMD
@@ -79,6 +81,7 @@ benchmark: build
 	CMD="$(BIN) -g $(GEN) -H $(H) -W $(W) --solvers all"; \
 	if [ -n "$(SEED)" ]; then CMD="$$CMD -s $(SEED)"; fi; \
 	if [ -n "$(ALPHA)" ]; then CMD="$$CMD -a $(ALPHA)"; fi; \
+	if [ -n "$(BATCH)" ]; then CMD="$$CMD --batch $(BATCH)"; fi; \
 	if [ "$(PNG)" = "1" ]; then CMD="$$CMD --png"; fi; \
 	if [ "$(BIN_SAVE)" = "1" ]; then CMD="$$CMD --bin"; fi; \
 	$$CMD
@@ -91,6 +94,7 @@ solve: build
 	fi; \
 	CMD="$(BIN) --load $(LOAD)"; \
 	if [ -n "$(SOLVERS)" ]; then CMD="$$CMD --solvers $(SOLVERS)"; else CMD="$$CMD --solvers bidir-gbfs"; fi; \
+	if [ -n "$(BATCH)" ]; then CMD="$$CMD --batch $(BATCH)"; fi; \
 	if [ "$(PNG)" = "1" ]; then CMD="$$CMD --png"; fi; \
 	if [ "$(BIN_SAVE)" = "1" ]; then CMD="$$CMD --bin"; fi; \
 	$$CMD
@@ -121,6 +125,7 @@ help:
 	@echo "   H=<int>, W=<int>         Height and Width (default: 8193)"
 	@echo "   SEED=<uint>              Random seed (default: random)"
 	@echo "   ALPHA=<float>            Transition threshold for Houston (default: 0.333)"
+	@echo "   BATCH=<int>              GPU batch size override (default: auto-tuned based on maze & GPU)"
 	@echo "   PNG=1                    Save PNG image(s) to generated_mazes/images/"
 	@echo "   BIN_SAVE=1               Save compact binary .maze / .sol file(s) to generated_mazes/binary/"
 	@echo "   LOAD=<path>              Path to .maze file for decoupled solving"
@@ -129,5 +134,5 @@ help:
 	@echo "   make generate GEN=houston H=2001 W=2001 PNG=1"
 	@echo "   make run GEN=houston H=2001 W=2001 SOLVERS=bidir-gbfs PNG=1"
 	@echo "   make benchmark GEN=wilson H=1001 W=1001"
-	@echo "   make solve LOAD=generated_mazes/binary/42_2001_2001_houston.maze SOLVERS=bidir-gbfs"
+	@echo "   make solve LOAD=generated_mazes/binary/42_2001_2001_houston.maze SOLVERS=gpu-bidir-bfs BATCH=64"
 	@echo "=============================================================================="

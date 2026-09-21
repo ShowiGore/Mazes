@@ -19,6 +19,8 @@ private:
     std::string selected_device_name;
     size_t total_frontier_expansions = 0;
     size_t cells_visited = 0;
+    int user_batch_size = -1;
+    std::string config_rationale;
 
     struct Impl;
     std::unique_ptr<Impl> pimpl;
@@ -39,6 +41,10 @@ public:
     [[nodiscard]] std::string getPlatformName() const { return selected_platform_name; }
     [[nodiscard]] size_t getVisitedCount() const { return cells_visited; }
     [[nodiscard]] size_t getExpansionsCount() const { return total_frontier_expansions; }
+    [[nodiscard]] std::string getConfigRationale() const { return config_rationale; }
+
+    void setBatchSize(int batch) { user_batch_size = batch; }
+    [[nodiscard]] int getBatchSize() const { return user_batch_size; }
 
     bool solve(const Maze &maze) override;
 };

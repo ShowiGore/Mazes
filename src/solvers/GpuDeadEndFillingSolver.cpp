@@ -3,6 +3,7 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 300
 #define CL_HPP_ENABLE_EXCEPTIONS
 #include <CL/opencl.hpp>
+#include "GpuUtils.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -557,10 +558,20 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
             pimpl->kernel_bitpacked_B.setArg(8, this->end.first);
             pimpl->kernel_bitpacked_B.setArg(9, this->end.second);
 
+            // Compute adaptive GPU execution parameters
+            const auto adaptive_cfg = computeGpuAdaptiveConfig(
+                pimpl->device,
+                this->height,
+                this->width,
+                1, // bitpacked is ~0.125 bytes per cell
+                this->user_batch_size
+            );
+            this->config_rationale = adaptive_cfg.rationale;
+            const int BATCH_SIZE = (adaptive_cfg.batch_size / 2) * 2; // ensure even for ping-pong
+
             total_iterations = 0;
             int changes = 0;
             const int zero = 0;
-            constexpr int BATCH_SIZE = 128;
 
             while (true) {
                 pimpl->queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);
