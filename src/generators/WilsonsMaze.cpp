@@ -4,6 +4,7 @@
 
 WilsonsMaze::WilsonsMaze(const int height, const int width, const unsigned int seed)
     : Maze(height, width, seed) {
+    this->generator_name = "wilson";
     WilsonsMaze::init();
     WilsonsMaze::generate();
     buildStartEnd();
@@ -11,6 +12,7 @@ WilsonsMaze::WilsonsMaze(const int height, const int width, const unsigned int s
 
 WilsonsMaze::WilsonsMaze(const int height, const int width)
     : Maze(height, width) {
+    this->generator_name = "wilson";
     WilsonsMaze::init();
     WilsonsMaze::generate();
     buildStartEnd();

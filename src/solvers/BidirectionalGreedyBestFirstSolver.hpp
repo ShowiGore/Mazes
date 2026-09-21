@@ -34,6 +34,7 @@ private:
     size_t visited_count = 0;
 
 public:
+    BidirectionalGreedyBestFirstSolver() { this->solver_name = "bidir-gbfs"; }
     bool solve(const Maze &maze) override;
 
     [[nodiscard]] size_t getVisitedCount() const { return visited_count; }

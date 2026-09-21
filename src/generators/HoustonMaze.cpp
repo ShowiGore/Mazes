@@ -13,6 +13,7 @@ HoustonMaze::HoustonMaze(const int height, const int width)
 // Custom threshold constructor
 HoustonMaze::HoustonMaze(const int height, const int width, const unsigned int seed, const float switch_threshold)
     : Maze(height, width, seed), switch_threshold(std::clamp(switch_threshold, 0.01f, 0.99f)) {
+    this->generator_name = "houston";
     HoustonMaze::init();
     HoustonMaze::generate();
     buildStartEnd();
@@ -20,6 +21,7 @@ HoustonMaze::HoustonMaze(const int height, const int width, const unsigned int s
 
 HoustonMaze::HoustonMaze(const int height, const int width, const float switch_threshold)
     : Maze(height, width), switch_threshold(std::clamp(switch_threshold, 0.01f, 0.99f)) {
+    this->generator_name = "houston";
     HoustonMaze::init();
     HoustonMaze::generate();
     buildStartEnd();

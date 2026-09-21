@@ -13,11 +13,9 @@ private:
     bool solve_impl(const Maze &maze_object);
 
 public:
-
+    AStarSolver() { this->solver_name = "astar"; }
     bool solve(const Maze &maze) override;
-
     void setHeuristicWeight(const int weight) { heuristic_weight = weight; }
-
 };
 
 #endif //MAZES_ASTARSOLVER_HPP

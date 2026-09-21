@@ -19,6 +19,7 @@
  */
 class GreedyBestFirstSolver : public Solver {
 public:
+    GreedyBestFirstSolver() { this->solver_name = "gbfs"; }
     bool solve(const Maze &maze) override;
 };
 

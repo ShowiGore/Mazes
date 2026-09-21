@@ -5,11 +5,9 @@
 #include "Solver.hpp"
 
 class RecursiveSolver : public Solver {
-
 public:
-
+    RecursiveSolver() { this->solver_name = "recursive"; }
     bool solve(const Maze &maze) override;
-
 };
 
 

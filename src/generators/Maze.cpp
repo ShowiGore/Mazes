@@ -22,8 +22,16 @@ std::pair<int,int> Maze::getEnd() const {
     return this->end;
 }
 
-std::vector<std::vector<bool>> Maze::getMaze() const {
+const std::vector<std::vector<bool>>& Maze::getMaze() const {
     return this->maze;
+}
+
+std::string Maze::getGeneratorName() const {
+    return this->generator_name;
+}
+
+void Maze::setGeneratorName(const std::string &name) {
+    this->generator_name = name;
 }
 
 int Maze::randomInRange (const int min, const int max) {
@@ -174,8 +182,7 @@ void Maze::print () const { std::cout << mazeToString(); }
 
 void Maze::printSimple () const { std::cout << mazeToStringSimple(); }
 
-void Maze::save_maze () {
-
+std::string Maze::save_maze(const std::string &custom_filepath) {
     png::image<png::gray_pixel_1> image(this->width, this->height);
     image.set_compression_type(png::compression_type_default);
 
@@ -189,12 +196,130 @@ void Maze::save_maze () {
         }
     }
 
-    const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
-    std::filesystem::create_directories(dir);
-    const std::string fullPath = (dir / std::format("{}_{}_{}_maze.png", seed, height, width)).string();
+    std::string fullPath = custom_filepath;
+    if (fullPath.empty()) {
+        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+        std::filesystem::create_directories(dir);
+        fullPath = (dir / std::format("{}_{}_{}_{}.png", seed, height, width, generator_name)).string();
+    }
 
     image.write(fullPath);
+    return fullPath;
+}
 
+std::string Maze::save_binary(const std::string &custom_filepath) const {
+    std::string fullPath = custom_filepath;
+    if (fullPath.empty()) {
+        const std::filesystem::path dir = std::filesystem::path(PROJECT_ROOT_DIR) / "generated_mazes";
+        std::filesystem::create_directories(dir);
+        fullPath = (dir / std::format("{}_{}_{}_{}.maze", seed, height, width, generator_name)).string();
+    }
+
+    std::ofstream out(fullPath, std::ios::binary);
+    if (!out) {
+        std::cerr << "Error: cannot open file for writing: " << fullPath << std::endl;
+        return "";
+    }
+
+    // Binary Header:
+    // Magic: "MAZE" (4 bytes)
+    constexpr char magic[4] = {'M', 'A', 'Z', 'E'};
+    out.write(magic, 4);
+
+    const uint32_t version = 1;
+    const uint32_t seed_val = this->seed;
+    const uint64_t h = this->height;
+    const uint64_t w = this->width;
+    const uint64_t start_r = this->start.first;
+    const uint64_t start_c = this->start.second;
+    const uint64_t end_r = this->end.first;
+    const uint64_t end_c = this->end.second;
+    const uint32_t gen_len = static_cast<uint32_t>(this->generator_name.size());
+
+    out.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    out.write(reinterpret_cast<const char*>(&seed_val), sizeof(seed_val));
+    out.write(reinterpret_cast<const char*>(&h), sizeof(h));
+    out.write(reinterpret_cast<const char*>(&w), sizeof(w));
+    out.write(reinterpret_cast<const char*>(&start_r), sizeof(start_r));
+    out.write(reinterpret_cast<const char*>(&start_c), sizeof(start_c));
+    out.write(reinterpret_cast<const char*>(&end_r), sizeof(end_r));
+    out.write(reinterpret_cast<const char*>(&end_c), sizeof(end_c));
+    out.write(reinterpret_cast<const char*>(&gen_len), sizeof(gen_len));
+    out.write(this->generator_name.data(), gen_len);
+
+    // Payload: Bit-packed cells (1 bit per cell: 1 = WALL, 0 = PATH)
+    const size_t total_bits = static_cast<size_t>(this->height) * this->width;
+    const size_t total_bytes = (total_bits + 7) / 8;
+    std::vector<uint8_t> buffer(total_bytes, 0);
+
+    size_t bit_idx = 0;
+    for (int r = 0; r < this->height; ++r) {
+        for (int c = 0; c < this->width; ++c) {
+            if (this->maze[r][c]) {
+                buffer[bit_idx / 8] |= (1 << (bit_idx % 8));
+            }
+            ++bit_idx;
+        }
+    }
+
+    out.write(reinterpret_cast<const char*>(buffer.data()), total_bytes);
+    return fullPath;
+}
+
+bool Maze::load_binary(const std::string &filepath) {
+    std::ifstream in(filepath, std::ios::binary);
+    if (!in) {
+        std::cerr << "Error: cannot open maze file for reading: " << filepath << std::endl;
+        return false;
+    }
+
+    char magic[4];
+    in.read(magic, 4);
+    if (magic[0] != 'M' || magic[1] != 'A' || magic[2] != 'Z' || magic[3] != 'E') {
+        std::cerr << "Error: invalid maze binary format (magic mismatch) in " << filepath << std::endl;
+        return false;
+    }
+
+    uint32_t version = 0, seed_val = 0, gen_len = 0;
+    uint64_t h = 0, w = 0, start_r = 0, start_c = 0, end_r = 0, end_c = 0;
+
+    in.read(reinterpret_cast<char*>(&version), sizeof(version));
+    in.read(reinterpret_cast<char*>(&seed_val), sizeof(seed_val));
+    in.read(reinterpret_cast<char*>(&h), sizeof(h));
+    in.read(reinterpret_cast<char*>(&w), sizeof(w));
+    in.read(reinterpret_cast<char*>(&start_r), sizeof(start_r));
+    in.read(reinterpret_cast<char*>(&start_c), sizeof(start_c));
+    in.read(reinterpret_cast<char*>(&end_r), sizeof(end_r));
+    in.read(reinterpret_cast<char*>(&end_c), sizeof(end_c));
+    in.read(reinterpret_cast<char*>(&gen_len), sizeof(gen_len));
+
+    std::string gen_name(gen_len, '\0');
+    in.read(gen_name.data(), gen_len);
+
+    this->seed = seed_val;
+    this->height = static_cast<int>(h);
+    this->width = static_cast<int>(w);
+    this->start = {static_cast<int>(start_r), static_cast<int>(start_c)};
+    this->end = {static_cast<int>(end_r), static_cast<int>(end_c)};
+    this->generator_name = gen_name;
+
+    this->maze.assign(this->height, std::vector<bool>(this->width, false));
+
+    const size_t total_bits = static_cast<size_t>(this->height) * this->width;
+    const size_t total_bytes = (total_bits + 7) / 8;
+    std::vector<uint8_t> buffer(total_bytes);
+
+    in.read(reinterpret_cast<char*>(buffer.data()), total_bytes);
+
+    size_t bit_idx = 0;
+    for (int r = 0; r < this->height; ++r) {
+        for (int c = 0; c < this->width; ++c) {
+            this->maze[r][c] = (buffer[bit_idx / 8] & (1 << (bit_idx % 8))) != 0;
+            ++bit_idx;
+        }
+    }
+
+    return true;
 }
 
 

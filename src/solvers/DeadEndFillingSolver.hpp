@@ -25,6 +25,7 @@
  */
 class DeadEndFillingSolver : public Solver {
 public:
+    DeadEndFillingSolver() { this->solver_name = "dead-end"; }
     bool solve(const Maze &maze) override;
 };
 

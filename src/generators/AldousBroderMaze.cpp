@@ -4,6 +4,7 @@
 
 AldousBroderMaze::AldousBroderMaze(const int height, const int width, const unsigned int seed)
     : Maze(height, width, seed) {
+    this->generator_name = "aldous-broder";
     AldousBroderMaze::init();
     AldousBroderMaze::generate();
     buildStartEnd();
@@ -11,6 +12,7 @@ AldousBroderMaze::AldousBroderMaze(const int height, const int width, const unsi
 
 AldousBroderMaze::AldousBroderMaze(const int height, const int width)
     : Maze(height, width) {
+    this->generator_name = "aldous-broder";
     AldousBroderMaze::init();
     AldousBroderMaze::generate();
     buildStartEnd();
