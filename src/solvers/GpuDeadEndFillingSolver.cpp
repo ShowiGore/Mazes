@@ -1,9 +1,6 @@
 #include "GpuDeadEndFillingSolver.hpp"
 
-#define CL_HPP_TARGET_OPENCL_VERSION 300
-#define CL_HPP_ENABLE_EXCEPTIONS
-#include <CL/opencl.hpp>
-#include "GpuUtils.hpp"
+#include "utilities/GpuUtils.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -343,10 +340,7 @@ __kernel void dead_end_bitpacked_step(
 )";
 
 struct GpuDeadEndFillingSolver::Impl {
-    cl::Platform platform;
-    cl::Device device;
-    cl::Context context;
-    cl::CommandQueue queue;
+    GpuContext gpu;
     cl::Program program;
     cl::Kernel kernel_coalesced_A;
     cl::Kernel kernel_coalesced_B;
@@ -354,19 +348,10 @@ struct GpuDeadEndFillingSolver::Impl {
     cl::Kernel kernel_substep_B;
     cl::Kernel kernel_bitpacked_A;
     cl::Kernel kernel_bitpacked_B;
-    bool ready = false;
 };
 
-static std::filesystem::path get_kernel_path() {
-#ifdef PROJECT_ROOT_DIR
-    return std::filesystem::path(PROJECT_ROOT_DIR) / "src" / "solvers" / "gpu_kernels" / "dead_end_filling.cl";
-#else
-    return std::filesystem::current_path() / "src" / "solvers" / "gpu_kernels" / "dead_end_filling.cl";
-#endif
-}
-
 GpuDeadEndFillingSolver::GpuDeadEndFillingSolver(std::string device_vendor)
-    : preferred_device_vendor(std::move(device_vendor)),
+    : GpuSolver(std::move(device_vendor)),
       pimpl(std::make_unique<Impl>()) {
     this->solver_name = "gpu-dead-end";
 }
@@ -381,112 +366,33 @@ bool GpuDeadEndFillingSolver::isGpuAvailable() {
 }
 
 bool GpuDeadEndFillingSolver::ensureOpenCLInitialized() {
-    if (pimpl->ready) {
+    if (pimpl->gpu.ready) {
         return true;
     }
 
-    setenv("LOOPY_NO_CACHE", "1", 1);
-    setenv("PYOPENCL_NO_CACHE", "1", 1);
-    setenv("POCL_KERNEL_CACHE", "0", 1);
-    setenv("CUDA_CACHE_DISABLE", "1", 1);
-
-    try {
-        std::vector<cl::Platform> platforms;
-        cl::Platform::get(&platforms);
-        if (platforms.empty()) {
-            std::cerr << "[GpuDeadEndFillingSolver] Error: No OpenCL platforms found.\n";
-            return false;
-        }
-
-        bool found = false;
-        std::string preferred_lower = preferred_device_vendor;
-        std::transform(preferred_lower.begin(), preferred_lower.end(), preferred_lower.begin(), ::tolower);
-
-        for (const auto &p : platforms) {
-            std::vector<cl::Device> devices;
-            p.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-            for (const auto &d : devices) {
-                std::string dev_vendor = d.getInfo<CL_DEVICE_VENDOR>();
-                std::string dev_name = d.getInfo<CL_DEVICE_NAME>();
-                std::string plat_name = p.getInfo<CL_PLATFORM_NAME>();
-
-                std::string dev_vendor_lower = dev_vendor;
-                std::transform(dev_vendor_lower.begin(), dev_vendor_lower.end(), dev_vendor_lower.begin(), ::tolower);
-
-                if (preferred_lower == "any" || dev_vendor_lower.find(preferred_lower) != std::string::npos) {
-                    pimpl->platform = p;
-                    pimpl->device = d;
-                    selected_platform_name = plat_name;
-                    selected_device_name = dev_name;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        if (!found) {
-            for (const auto &p : platforms) {
-                std::vector<cl::Device> devices;
-                p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-                if (!devices.empty()) {
-                    pimpl->platform = p;
-                    pimpl->device = devices.front();
-                    selected_platform_name = p.getInfo<CL_PLATFORM_NAME>();
-                    selected_device_name = pimpl->device.getInfo<CL_DEVICE_NAME>();
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if (!found) {
-            std::cerr << "[GpuDeadEndFillingSolver] Error: No suitable OpenCL device found.\n";
-            return false;
-        }
-
-        pimpl->context = cl::Context(pimpl->device);
-        pimpl->queue = cl::CommandQueue(pimpl->context, pimpl->device);
-
-        std::string kernel_source;
-        const auto kernel_path = get_kernel_path();
-        std::ifstream kf(kernel_path);
-        if (kf) {
-            kernel_source.assign((std::istreambuf_iterator<char>(kf)), std::istreambuf_iterator<char>());
-        } else {
-            kernel_source = EMBEDDED_DEAD_END_KERNELS;
-        }
-
-        cl::Program::Sources sources = {{kernel_source.c_str(), kernel_source.length()}};
-        pimpl->program = cl::Program(pimpl->context, sources);
-
-        if (pimpl->program.build({pimpl->device}, "-cl-std=CL2.0 -cl-fast-relaxed-math") != CL_SUCCESS) {
-            std::string log = pimpl->program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(pimpl->device);
-            std::cerr << "[GpuDeadEndFillingSolver] Kernel compilation failed:\n" << log << std::endl;
-            return false;
-        }
-
-        pimpl->kernel_coalesced_A = cl::Kernel(pimpl->program, "dead_end_filling_step");
-        pimpl->kernel_coalesced_B = cl::Kernel(pimpl->program, "dead_end_filling_step");
-
-        pimpl->kernel_substep_A = cl::Kernel(pimpl->program, "dead_end_substep2");
-        pimpl->kernel_substep_B = cl::Kernel(pimpl->program, "dead_end_substep2");
-
-        pimpl->kernel_bitpacked_A = cl::Kernel(pimpl->program, "dead_end_bitpacked_step");
-        pimpl->kernel_bitpacked_B = cl::Kernel(pimpl->program, "dead_end_bitpacked_step");
-
-        pimpl->ready = true;
-        is_initialized = true;
-
-        std::cout << "[GpuDeadEndFillingSolver] OpenCL Initialized on "
-                  << selected_device_name << " (" << selected_platform_name << ")\n";
-        return true;
-
-    } catch (const cl::Error &err) {
-        std::cerr << "[GpuDeadEndFillingSolver] OpenCL Exception: " << err.what()
-                  << " (" << err.err() << ")\n";
+    if (!pimpl->gpu.init(this->preferred_device_vendor, "[GpuDeadEndFillingSolver]")) {
         return false;
     }
+    this->selected_platform_name = pimpl->gpu.platform_name;
+    this->selected_device_name = pimpl->gpu.device_name;
+
+    const std::string kernel_source = GpuContext::loadKernelSource("dead_end_filling.cl", EMBEDDED_DEAD_END_KERNELS);
+    pimpl->program = pimpl->gpu.buildProgram(kernel_source, "-cl-std=CL2.0 -cl-fast-relaxed-math", "[GpuDeadEndFillingSolver]");
+    if (!pimpl->gpu.ready) {
+        return false;
+    }
+
+    pimpl->kernel_coalesced_A = cl::Kernel(pimpl->program, "dead_end_filling_step");
+    pimpl->kernel_coalesced_B = cl::Kernel(pimpl->program, "dead_end_filling_step");
+
+    pimpl->kernel_substep_A = cl::Kernel(pimpl->program, "dead_end_substep2");
+    pimpl->kernel_substep_B = cl::Kernel(pimpl->program, "dead_end_substep2");
+
+    pimpl->kernel_bitpacked_A = cl::Kernel(pimpl->program, "dead_end_bitpacked_step");
+    pimpl->kernel_bitpacked_B = cl::Kernel(pimpl->program, "dead_end_bitpacked_step");
+
+    is_initialized = true;
+    return true;
 }
 
 bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
@@ -513,28 +419,18 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
         for (int r = 0; r < this->height; ++r) {
             const size_t row_offset = static_cast<size_t>(r) * words_per_row;
             for (int c = 0; c < this->width; ++c) {
-                const int word_idx = c / 32;
-                const int bit_idx = c % 32;
-                if (!grid[r][c]) { // PATH = 0
-                    host_words[row_offset + word_idx] &= ~(1U << bit_idx);
+                if (!grid[r][c]) {
+                    host_words[row_offset + (c / 32)] &= ~(1U << (c % 32));
                 }
             }
         }
 
         try {
-            cl::Buffer buf_in(pimpl->context, CL_MEM_READ_WRITE, total_words * sizeof(uint32_t));
-            cl::Buffer buf_out(pimpl->context, CL_MEM_READ_WRITE, total_words * sizeof(uint32_t));
-            cl::Buffer buf_changes(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+            cl::Buffer buf_in(pimpl->gpu.context, CL_MEM_READ_WRITE, total_words * sizeof(uint32_t));
+            cl::Buffer buf_out(pimpl->gpu.context, CL_MEM_READ_WRITE, total_words * sizeof(uint32_t));
+            cl::Buffer buf_changes(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
 
-            pimpl->queue.enqueueWriteBuffer(buf_in, CL_TRUE, 0, total_words * sizeof(uint32_t), host_words.data());
-
-            constexpr size_t TILE_W = 32;
-            constexpr size_t TILE_H = 8;
-            const cl::NDRange local_range(TILE_W, TILE_H);
-            const cl::NDRange global_range(
-                ((words_per_row + TILE_W - 1) / TILE_W) * TILE_W,
-                ((this->height + TILE_H - 1) / TILE_H) * TILE_H
-            );
+            pimpl->gpu.queue.enqueueWriteBuffer(buf_in, CL_TRUE, 0, total_words * sizeof(uint32_t), host_words.data());
 
             pimpl->kernel_bitpacked_A.setArg(0, buf_in);
             pimpl->kernel_bitpacked_A.setArg(1, buf_out);
@@ -560,7 +456,7 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
 
             // Compute adaptive GPU execution parameters
             const auto adaptive_cfg = computeGpuAdaptiveConfig(
-                pimpl->device,
+                pimpl->gpu.device,
                 this->height,
                 this->width,
                 1, // bitpacked is ~0.125 bytes per cell
@@ -569,27 +465,33 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
             this->config_rationale = adaptive_cfg.rationale;
             const int BATCH_SIZE = (adaptive_cfg.batch_size / 2) * 2; // ensure even for ping-pong
 
+            cl::NDRange local_range(32, 8);
+            cl::NDRange global_range(
+                ((words_per_row + 31) / 32) * 32,
+                ((this->height + 7) / 8) * 8
+            );
+
             total_iterations = 0;
             int changes = 0;
             const int zero = 0;
 
             while (true) {
-                pimpl->queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);
+                pimpl->gpu.queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);
 
                 for (int b = 0; b < BATCH_SIZE; b += 2) {
-                    pimpl->queue.enqueueNDRangeKernel(pimpl->kernel_bitpacked_A, cl::NullRange, global_range, local_range);
-                    pimpl->queue.enqueueNDRangeKernel(pimpl->kernel_bitpacked_B, cl::NullRange, global_range, local_range);
+                    pimpl->gpu.queue.enqueueNDRangeKernel(pimpl->kernel_bitpacked_A, cl::NullRange, global_range, local_range);
+                    pimpl->gpu.queue.enqueueNDRangeKernel(pimpl->kernel_bitpacked_B, cl::NullRange, global_range, local_range);
                     total_iterations += 2;
                 }
 
-                pimpl->queue.enqueueReadBuffer(buf_changes, CL_TRUE, 0, sizeof(int), &changes);
+                pimpl->gpu.queue.enqueueReadBuffer(buf_changes, CL_TRUE, 0, sizeof(int), &changes);
 
                 if (changes == 0) {
                     break;
                 }
             }
 
-            pimpl->queue.enqueueReadBuffer(buf_in, CL_TRUE, 0, total_words * sizeof(uint32_t), host_words.data());
+            pimpl->gpu.queue.enqueueReadBuffer(buf_in, CL_TRUE, 0, total_words * sizeof(uint32_t), host_words.data());
 
             this->solution.assign(this->height, std::vector<bool>(this->width, false));
             this->visited.assign(this->height, std::vector<bool>(this->width, false));
@@ -639,11 +541,11 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
     }
 
     try {
-        cl::Buffer buf_in(pimpl->context, CL_MEM_READ_WRITE, total_cells * sizeof(uint8_t));
-        cl::Buffer buf_out(pimpl->context, CL_MEM_READ_WRITE, total_cells * sizeof(uint8_t));
-        cl::Buffer buf_changes(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_in(pimpl->gpu.context, CL_MEM_READ_WRITE, total_cells * sizeof(uint8_t));
+        cl::Buffer buf_out(pimpl->gpu.context, CL_MEM_READ_WRITE, total_cells * sizeof(uint8_t));
+        cl::Buffer buf_changes(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
 
-        pimpl->queue.enqueueWriteBuffer(buf_in, CL_TRUE, 0, total_cells * sizeof(uint8_t), host_grid.data());
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_in, CL_TRUE, 0, total_cells * sizeof(uint8_t), host_grid.data());
 
         constexpr size_t TILE_W = 32;
         constexpr size_t TILE_H = 8;
@@ -683,22 +585,22 @@ bool GpuDeadEndFillingSolver::solve(const Maze &maze_object) {
         constexpr int BATCH_SIZE = 128;
 
         while (true) {
-            pimpl->queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);
+            pimpl->gpu.queue.enqueueWriteBuffer(buf_changes, CL_FALSE, 0, sizeof(int), &zero);
 
             for (int b = 0; b < BATCH_SIZE; b += 2) {
-                pimpl->queue.enqueueNDRangeKernel(k_A, cl::NullRange, global_range, local_range);
-                pimpl->queue.enqueueNDRangeKernel(k_B, cl::NullRange, global_range, local_range);
+                pimpl->gpu.queue.enqueueNDRangeKernel(k_A, cl::NullRange, global_range, local_range);
+                pimpl->gpu.queue.enqueueNDRangeKernel(k_B, cl::NullRange, global_range, local_range);
                 total_iterations += 2 * step_multiplier;
             }
 
-            pimpl->queue.enqueueReadBuffer(buf_changes, CL_TRUE, 0, sizeof(int), &changes);
+            pimpl->gpu.queue.enqueueReadBuffer(buf_changes, CL_TRUE, 0, sizeof(int), &changes);
 
             if (changes == 0) {
                 break;
             }
         }
 
-        pimpl->queue.enqueueReadBuffer(buf_in, CL_TRUE, 0, total_cells * sizeof(uint8_t), host_grid.data());
+        pimpl->gpu.queue.enqueueReadBuffer(buf_in, CL_TRUE, 0, total_cells * sizeof(uint8_t), host_grid.data());
 
         this->solution.assign(this->height, std::vector<bool>(this->width, false));
         this->visited.assign(this->height, std::vector<bool>(this->width, false));

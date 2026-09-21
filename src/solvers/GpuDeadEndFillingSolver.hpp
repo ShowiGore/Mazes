@@ -1,7 +1,7 @@
 #ifndef MAZES_GPUDEADENDFILLINGSOLVER_HPP
 #define MAZES_GPUDEADENDFILLINGSOLVER_HPP
 
-#include "Solver.hpp"
+#include "GpuSolver.hpp"
 #include <string>
 #include <memory>
 
@@ -19,16 +19,11 @@ enum class GpuDeadEndMode {
  * - SUBSTEPPING: Multi-step cellular automaton in shared memory (halo R=2).
  * - COALESCED: Natural 32x8 warp-coalesced 1-step kernel.
  */
-class GpuDeadEndFillingSolver : public Solver {
+class GpuDeadEndFillingSolver : public GpuSolver {
 private:
-    std::string preferred_device_vendor;
-    std::string selected_platform_name;
-    std::string selected_device_name;
     size_t total_iterations = 0;
     bool is_initialized = false;
     GpuDeadEndMode mode = GpuDeadEndMode::BITPACKED;
-    int user_batch_size = -1;
-    std::string config_rationale;
 
     struct Impl;
     std::unique_ptr<Impl> pimpl;
@@ -46,16 +41,10 @@ public:
     GpuDeadEndFillingSolver& operator=(const GpuDeadEndFillingSolver&) = delete;
 
     [[nodiscard]] bool isGpuAvailable();
-    [[nodiscard]] std::string getDeviceName() const { return selected_device_name; }
-    [[nodiscard]] std::string getPlatformName() const { return selected_platform_name; }
     [[nodiscard]] size_t getIterationCount() const { return total_iterations; }
-    [[nodiscard]] std::string getConfigRationale() const { return config_rationale; }
 
     void setMode(GpuDeadEndMode new_mode) { mode = new_mode; }
     [[nodiscard]] GpuDeadEndMode getMode() const { return mode; }
-
-    void setBatchSize(int batch) { user_batch_size = batch; }
-    [[nodiscard]] int getBatchSize() const { return user_batch_size; }
 
     bool solve(const Maze &maze) override;
 };

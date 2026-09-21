@@ -19,6 +19,7 @@
 
 // Solvers
 #include "solvers/Solver.hpp"
+#include "solvers/GpuSolver.hpp"
 #include "solvers/BidirectionalGreedyBestFirstSolver.hpp"
 #include "solvers/GreedyBestFirstSolver.hpp"
 #include "solvers/DeadEndFillingSolver.hpp"
@@ -298,17 +299,11 @@ int main(int argc, char* argv[]) {
         } else if (solver_name == "dead-end") {
             solver = std::make_unique<DeadEndFillingSolver>();
         } else if (solver_name == "gpu-dead-end" || solver_name == "gpu" || solver_name == "opencl") {
-            auto s = std::make_unique<GpuDeadEndFillingSolver>();
-            if (config.batch_specified) s->setBatchSize(config.batch_size);
-            solver = std::move(s);
+            solver = std::make_unique<GpuDeadEndFillingSolver>();
         } else if (solver_name == "gpu-bidir-bfs" || solver_name == "gpu-bfs" || solver_name == "gpu-bidirectional-bfs") {
-            auto s = std::make_unique<GpuBidirectionalBfsSolver>();
-            if (config.batch_specified) s->setBatchSize(config.batch_size);
-            solver = std::move(s);
+            solver = std::make_unique<GpuBidirectionalBfsSolver>();
         } else if (solver_name == "gpu-bidir-gbfs" || solver_name == "gpu-gbfs" || solver_name == "gpu-beam-gbfs") {
-            auto s = std::make_unique<GpuBidirectionalGbfsSolver>();
-            if (config.batch_specified) s->setBatchSize(config.batch_size);
-            solver = std::move(s);
+            solver = std::make_unique<GpuBidirectionalGbfsSolver>();
         } else if (solver_name == "gpu-hpa" || solver_name == "gpu-hierarchical" || solver_name == "hpa") {
             solver = std::make_unique<GpuHierarchicalPathfindingSolver>();
         } else if (solver_name == "astar") {
@@ -320,6 +315,10 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        if (auto* gpu = dynamic_cast<GpuSolver*>(solver.get())) {
+            if (config.batch_specified) gpu->setBatchSize(config.batch_size);
+        }
+
         std::cout << "\n--- Solver: " << solver->getSolverName() << " ---" << std::endl;
         tp.start();
         const bool solvable = solver->solve(*maze);
@@ -329,28 +328,27 @@ int main(int argc, char* argv[]) {
         tp.print();
         std::cout << "Solvable:   " << (solvable ? "YES" : "NO") << std::endl;
 
+        if (auto* gpu = dynamic_cast<GpuSolver*>(solver.get())) {
+            std::cout << "GPU Device:     " << gpu->getDeviceName() << " (" << gpu->getPlatformName() << ")\n";
+            if (!gpu->getConfigRationale().empty()) {
+                std::cout << "GPU Config:     " << gpu->getConfigRationale() << "\n";
+            }
+        }
         if (auto* bidir = dynamic_cast<BidirectionalGreedyBestFirstSolver*>(solver.get())) {
             std::cout << "Cells visited:  " << bidir->getVisitedCount() << std::endl;
         }
-        if (auto* gpu = dynamic_cast<GpuDeadEndFillingSolver*>(solver.get())) {
-            std::cout << "GPU Device:     " << gpu->getDeviceName() << " (" << gpu->getPlatformName() << ")\n";
-            std::cout << "GPU Config:     " << gpu->getConfigRationale() << "\n";
-            std::cout << "GPU Iterations: " << gpu->getIterationCount() << std::endl;
+        if (auto* gpu_de = dynamic_cast<GpuDeadEndFillingSolver*>(solver.get())) {
+            std::cout << "GPU Iterations: " << gpu_de->getIterationCount() << std::endl;
         }
         if (auto* gpu_bfs = dynamic_cast<GpuBidirectionalBfsSolver*>(solver.get())) {
-            std::cout << "GPU Device:     " << gpu_bfs->getDeviceName() << " (" << gpu_bfs->getPlatformName() << ")\n";
-            std::cout << "GPU Config:     " << gpu_bfs->getConfigRationale() << "\n";
             std::cout << "Frontier Steps: " << gpu_bfs->getExpansionsCount() << "\n";
             std::cout << "Cells visited:  " << gpu_bfs->getVisitedCount() << std::endl;
         }
         if (auto* gpu_gbfs = dynamic_cast<GpuBidirectionalGbfsSolver*>(solver.get())) {
-            std::cout << "GPU Device:     " << gpu_gbfs->getDeviceName() << " (" << gpu_gbfs->getPlatformName() << ")\n";
-            std::cout << "GPU Config:     " << gpu_gbfs->getConfigRationale() << "\n";
             std::cout << "Frontier Steps: " << gpu_gbfs->getExpansionsCount() << "\n";
             std::cout << "Cells visited:  " << gpu_gbfs->getVisitedCount() << std::endl;
         }
         if (auto* gpu_hpa = dynamic_cast<GpuHierarchicalPathfindingSolver*>(solver.get())) {
-            std::cout << "GPU Device:     " << gpu_hpa->getDeviceName() << " (" << gpu_hpa->getPlatformName() << ")\n";
             std::cout << "Portals:        " << gpu_hpa->getPortalsCount() << "\n";
             std::cout << "Macro Steps:    " << gpu_hpa->getMacroSteps() << std::endl;
         }

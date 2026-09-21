@@ -1,17 +1,9 @@
 #include "GpuBidirectionalBfsSolver.hpp"
-
-#define CL_HPP_TARGET_OPENCL_VERSION 300
-#define CL_HPP_ENABLE_EXCEPTIONS
-#include <CL/opencl.hpp>
-#include "GpuUtils.hpp"
+#include "utilities/GpuUtils.hpp"
 
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include <filesystem>
 #include <vector>
 #include <algorithm>
-#include <cstdlib>
 
 static const char* EMBEDDED_FRONTIER_BFS_KERNEL = R"(
 #define DIR_UP    0
@@ -90,26 +82,14 @@ __kernel void expand_frontier_step(
 )";
 
 struct GpuBidirectionalBfsSolver::Impl {
-    cl::Platform platform;
-    cl::Device device;
-    cl::Context context;
-    cl::CommandQueue queue;
+    GpuContext gpu;
     cl::Program program;
     cl::Kernel kernel;
     cl::Kernel kernel_batched;
-    bool ready = false;
 };
 
-static std::filesystem::path get_kernel_path() {
-#ifdef PROJECT_ROOT_DIR
-    return std::filesystem::path(PROJECT_ROOT_DIR) / "src" / "solvers" / "gpu_kernels" / "frontier_bfs.cl";
-#else
-    return std::filesystem::current_path() / "src" / "solvers" / "gpu_kernels" / "frontier_bfs.cl";
-#endif
-}
-
 GpuBidirectionalBfsSolver::GpuBidirectionalBfsSolver(std::string device_vendor)
-    : preferred_device_vendor(std::move(device_vendor)),
+    : GpuSolver(std::move(device_vendor)),
       pimpl(std::make_unique<Impl>()) {
     this->solver_name = "gpu-bidir-bfs";
 }
@@ -120,104 +100,25 @@ GpuBidirectionalBfsSolver::GpuBidirectionalBfsSolver(GpuBidirectionalBfsSolver&&
 GpuBidirectionalBfsSolver& GpuBidirectionalBfsSolver::operator=(GpuBidirectionalBfsSolver&&) noexcept = default;
 
 bool GpuBidirectionalBfsSolver::ensureOpenCLInitialized() {
-    if (pimpl->ready) {
+    if (pimpl->gpu.ready) {
         return true;
     }
 
-    setenv("LOOPY_NO_CACHE", "1", 1);
-    setenv("PYOPENCL_NO_CACHE", "1", 1);
-    setenv("POCL_KERNEL_CACHE", "0", 1);
-    setenv("CUDA_CACHE_DISABLE", "1", 1);
-
-    try {
-        std::vector<cl::Platform> platforms;
-        cl::Platform::get(&platforms);
-        if (platforms.empty()) {
-            std::cerr << "[GpuBidirectionalBfsSolver] Error: No OpenCL platforms found.\n";
-            return false;
-        }
-
-        bool found = false;
-        std::string preferred_lower = preferred_device_vendor;
-        std::transform(preferred_lower.begin(), preferred_lower.end(), preferred_lower.begin(), ::tolower);
-
-        for (const auto &p : platforms) {
-            std::vector<cl::Device> devices;
-            p.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-            for (const auto &d : devices) {
-                std::string dev_vendor = d.getInfo<CL_DEVICE_VENDOR>();
-                std::string dev_name = d.getInfo<CL_DEVICE_NAME>();
-                std::string plat_name = p.getInfo<CL_PLATFORM_NAME>();
-
-                std::string dev_vendor_lower = dev_vendor;
-                std::transform(dev_vendor_lower.begin(), dev_vendor_lower.end(), dev_vendor_lower.begin(), ::tolower);
-
-                if (preferred_lower == "any" || dev_vendor_lower.find(preferred_lower) != std::string::npos) {
-                    pimpl->platform = p;
-                    pimpl->device = d;
-                    selected_platform_name = plat_name;
-                    selected_device_name = dev_name;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        if (!found) {
-            for (const auto &p : platforms) {
-                std::vector<cl::Device> devices;
-                p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-                if (!devices.empty()) {
-                    pimpl->platform = p;
-                    pimpl->device = devices.front();
-                    selected_platform_name = p.getInfo<CL_PLATFORM_NAME>();
-                    selected_device_name = pimpl->device.getInfo<CL_DEVICE_NAME>();
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if (!found) {
-            std::cerr << "[GpuBidirectionalBfsSolver] Error: No suitable OpenCL device found.\n";
-            return false;
-        }
-
-        pimpl->context = cl::Context(pimpl->device);
-        pimpl->queue = cl::CommandQueue(pimpl->context, pimpl->device);
-
-        std::string kernel_source;
-        const auto kernel_path = get_kernel_path();
-        std::ifstream kf(kernel_path);
-        if (kf) {
-            kernel_source.assign((std::istreambuf_iterator<char>(kf)), std::istreambuf_iterator<char>());
-        } else {
-            kernel_source = EMBEDDED_FRONTIER_BFS_KERNEL;
-        }
-
-        cl::Program::Sources sources = {{kernel_source.c_str(), kernel_source.length()}};
-        pimpl->program = cl::Program(pimpl->context, sources);
-
-        if (pimpl->program.build({pimpl->device}, "-cl-std=CL2.0 -cl-fast-relaxed-math") != CL_SUCCESS) {
-            std::string log = pimpl->program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(pimpl->device);
-            std::cerr << "[GpuBidirectionalBfsSolver] Kernel compilation failed:\n" << log << std::endl;
-            return false;
-        }
-
-        pimpl->kernel = cl::Kernel(pimpl->program, "expand_frontier_step");
-        pimpl->kernel_batched = cl::Kernel(pimpl->program, "expand_frontier_batched");
-        pimpl->ready = true;
-
-        std::cout << "[GpuBidirectionalBfsSolver] OpenCL Initialized on "
-                  << selected_device_name << " (" << selected_platform_name << ")\n";
-        return true;
-
-    } catch (const cl::Error &err) {
-        std::cerr << "[GpuBidirectionalBfsSolver] OpenCL Exception: " << err.what()
-                  << " (" << err.err() << ")\n";
+    if (!pimpl->gpu.init(this->preferred_device_vendor, "[GpuBidirectionalBfsSolver]")) {
         return false;
     }
+    this->selected_platform_name = pimpl->gpu.platform_name;
+    this->selected_device_name = pimpl->gpu.device_name;
+
+    const std::string kernel_source = GpuContext::loadKernelSource("frontier_bfs.cl", EMBEDDED_FRONTIER_BFS_KERNEL);
+    pimpl->program = pimpl->gpu.buildProgram(kernel_source, "-cl-std=CL2.0 -cl-fast-relaxed-math", "[GpuBidirectionalBfsSolver]");
+    if (!pimpl->gpu.ready) {
+        return false;
+    }
+
+    pimpl->kernel = cl::Kernel(pimpl->program, "expand_frontier_step");
+    pimpl->kernel_batched = cl::Kernel(pimpl->program, "expand_frontier_batched");
+    return true;
 }
 
 bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
@@ -254,12 +155,12 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
 
     try {
         // State grid in VRAM (32-bit int per cell for native atomic CAS)
-        cl::Buffer buf_state(pimpl->context, CL_MEM_READ_WRITE, total_cells * sizeof(int));
-        pimpl->queue.enqueueWriteBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
+        cl::Buffer buf_state(pimpl->gpu.context, CL_MEM_READ_WRITE, total_cells * sizeof(int));
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
 
         // Compute adaptive GPU execution parameters (batch size, workgroup, frontier capacity)
         const auto adaptive_cfg = computeGpuAdaptiveConfig(
-            pimpl->device,
+            pimpl->gpu.device,
             this->height,
             this->width,
             sizeof(int),
@@ -271,27 +172,27 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
         const size_t FRONTIER_CAP = adaptive_cfg.frontier_capacity;
 
         // Dynamic frontier capacity
-        cl::Buffer buf_f_curr(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
-        cl::Buffer buf_f_next(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
-        cl::Buffer buf_b_curr(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
-        cl::Buffer buf_b_next(pimpl->context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
+        cl::Buffer buf_f_curr(pimpl->gpu.context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
+        cl::Buffer buf_f_next(pimpl->gpu.context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
+        cl::Buffer buf_b_curr(pimpl->gpu.context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
+        cl::Buffer buf_b_next(pimpl->gpu.context, CL_MEM_READ_WRITE, FRONTIER_CAP * sizeof(int));
 
-        cl::Buffer buf_f_count(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
-        cl::Buffer buf_b_count(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
-        cl::Buffer buf_collision_found(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
-        cl::Buffer buf_collision_cell_A(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
-        cl::Buffer buf_collision_cell_B(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
-        cl::Buffer buf_steps_executed(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_f_count(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_b_count(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_collision_found(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_collision_cell_A(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_collision_cell_B(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_steps_executed(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
 
         // Upload initial frontiers and counters
         const int one = 1;
         const int zero = 0;
-        pimpl->queue.enqueueWriteBuffer(buf_f_curr, CL_FALSE, 0, sizeof(int), &start_idx);
-        pimpl->queue.enqueueWriteBuffer(buf_b_curr, CL_FALSE, 0, sizeof(int), &end_idx);
-        pimpl->queue.enqueueWriteBuffer(buf_f_count, CL_FALSE, 0, sizeof(int), &one);
-        pimpl->queue.enqueueWriteBuffer(buf_b_count, CL_FALSE, 0, sizeof(int), &one);
-        pimpl->queue.enqueueWriteBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &zero);
-        pimpl->queue.enqueueWriteBuffer(buf_steps_executed, CL_TRUE, 0, sizeof(int), &zero);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_f_curr, CL_FALSE, 0, sizeof(int), &start_idx);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_b_curr, CL_FALSE, 0, sizeof(int), &end_idx);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_f_count, CL_FALSE, 0, sizeof(int), &one);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_b_count, CL_FALSE, 0, sizeof(int), &one);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &zero);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_steps_executed, CL_TRUE, 0, sizeof(int), &zero);
 
         int f_count = 1;
         int b_count = 1;
@@ -318,7 +219,7 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
 
         // Batched Persistent Frontier Expansion Loop
         while (collision_found == 0 && f_count > 0 && b_count > 0) {
-            pimpl->queue.enqueueNDRangeKernel(
+            pimpl->gpu.queue.enqueueNDRangeKernel(
                 pimpl->kernel_batched,
                 cl::NullRange,
                 cl::NDRange(LOCAL_WORKGROUP_SIZE),
@@ -326,16 +227,16 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
             );
 
             // Read collision status and counts once per batch
-            pimpl->queue.enqueueReadBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &collision_found);
-            pimpl->queue.enqueueReadBuffer(buf_f_count, CL_FALSE, 0, sizeof(int), &f_count);
-            pimpl->queue.enqueueReadBuffer(buf_b_count, CL_TRUE, 0, sizeof(int), &b_count);
+            pimpl->gpu.queue.enqueueReadBuffer(buf_collision_found, CL_FALSE, 0, sizeof(int), &collision_found);
+            pimpl->gpu.queue.enqueueReadBuffer(buf_f_count, CL_FALSE, 0, sizeof(int), &f_count);
+            pimpl->gpu.queue.enqueueReadBuffer(buf_b_count, CL_TRUE, 0, sizeof(int), &b_count);
 
             if (collision_found != 0) break;
             if (f_count == 0 || b_count == 0) break;
         }
 
         int steps_executed = 0;
-        pimpl->queue.enqueueReadBuffer(buf_steps_executed, CL_TRUE, 0, sizeof(int), &steps_executed);
+        pimpl->gpu.queue.enqueueReadBuffer(buf_steps_executed, CL_TRUE, 0, sizeof(int), &steps_executed);
         total_frontier_expansions = steps_executed;
 
         if (collision_found == 0) {
@@ -343,9 +244,9 @@ bool GpuBidirectionalBfsSolver::solve(const Maze &maze_object) {
             return false;
         }
 
-        pimpl->queue.enqueueReadBuffer(buf_collision_cell_A, CL_FALSE, 0, sizeof(int), &cell_A);
-        pimpl->queue.enqueueReadBuffer(buf_collision_cell_B, CL_FALSE, 0, sizeof(int), &cell_B);
-        pimpl->queue.enqueueReadBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
+        pimpl->gpu.queue.enqueueReadBuffer(buf_collision_cell_A, CL_FALSE, 0, sizeof(int), &cell_A);
+        pimpl->gpu.queue.enqueueReadBuffer(buf_collision_cell_B, CL_FALSE, 0, sizeof(int), &cell_B);
+        pimpl->gpu.queue.enqueueReadBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
 
         // Path Reconstruction: follow parent pointers
         this->solution.assign(this->height, std::vector<bool>(this->width, false));

@@ -1,7 +1,7 @@
 #ifndef MAZES_GPUHIERARCHICALPATHFINDINGSOLVER_HPP
 #define MAZES_GPUHIERARCHICALPATHFINDINGSOLVER_HPP
 
-#include "Solver.hpp"
+#include "GpuSolver.hpp"
 #include <string>
 #include <memory>
 
@@ -13,11 +13,8 @@
  * abstract graph (orders of magnitude smaller than the raw grid), solves
  * the macro-path in milliseconds, and refines internal tile paths in parallel.
  */
-class GpuHierarchicalPathfindingSolver : public Solver {
+class GpuHierarchicalPathfindingSolver : public GpuSolver {
 private:
-    std::string preferred_device_vendor;
-    std::string selected_platform_name;
-    std::string selected_device_name;
     size_t total_portals = 0;
     size_t macro_steps = 0;
 
@@ -36,8 +33,6 @@ public:
     GpuHierarchicalPathfindingSolver(const GpuHierarchicalPathfindingSolver&) = delete;
     GpuHierarchicalPathfindingSolver& operator=(const GpuHierarchicalPathfindingSolver&) = delete;
 
-    [[nodiscard]] std::string getDeviceName() const { return selected_device_name; }
-    [[nodiscard]] std::string getPlatformName() const { return selected_platform_name; }
     [[nodiscard]] size_t getPortalsCount() const { return total_portals; }
     [[nodiscard]] size_t getMacroSteps() const { return macro_steps; }
 

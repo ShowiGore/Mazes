@@ -9,10 +9,7 @@
 #include <queue>
 #include <unordered_map>
 
-#define CL_HPP_ENABLE_EXCEPTIONS
-#define CL_HPP_TARGET_OPENCL_VERSION 200
-#define CL_HPP_MINIMUM_OPENCL_VERSION 120
-#include <CL/opencl.hpp>
+#include "utilities/GpuUtils.hpp"
 
 static const char* EMBEDDED_HPA_KERNELS = R"(
 #define TILE_DIM 32
@@ -103,26 +100,14 @@ __kernel void hpa_find_vertical_portals(
 )";
 
 struct GpuHierarchicalPathfindingSolver::Impl {
-    cl::Platform platform;
-    cl::Device device;
-    cl::Context context;
-    cl::CommandQueue queue;
+    GpuContext gpu;
     cl::Program program;
     cl::Kernel kernel_horiz;
     cl::Kernel kernel_vert;
-    bool ready = false;
 };
 
-static std::filesystem::path get_kernel_path() {
-#ifdef PROJECT_ROOT_DIR
-    return std::filesystem::path(PROJECT_ROOT_DIR) / "src" / "solvers" / "gpu_kernels" / "hpa_kernels.cl";
-#else
-    return std::filesystem::current_path() / "src" / "solvers" / "gpu_kernels" / "hpa_kernels.cl";
-#endif
-}
-
 GpuHierarchicalPathfindingSolver::GpuHierarchicalPathfindingSolver(std::string device_vendor)
-    : preferred_device_vendor(std::move(device_vendor)),
+    : GpuSolver(std::move(device_vendor)),
       pimpl(std::make_unique<Impl>()) {
     this->solver_name = "gpu-hpa";
 }
@@ -132,94 +117,21 @@ GpuHierarchicalPathfindingSolver::GpuHierarchicalPathfindingSolver(GpuHierarchic
 GpuHierarchicalPathfindingSolver& GpuHierarchicalPathfindingSolver::operator=(GpuHierarchicalPathfindingSolver&&) noexcept = default;
 
 bool GpuHierarchicalPathfindingSolver::ensureOpenCLInitialized() {
-    if (pimpl->ready) return true;
+    if (pimpl->gpu.ready) return true;
 
-    setenv("LOOPY_NO_CACHE", "1", 1);
-    setenv("PYOPENCL_NO_CACHE", "1", 1);
-    setenv("POCL_KERNEL_CACHE", "0", 1);
-    setenv("CUDA_CACHE_DISABLE", "1", 1);
-
-    try {
-        std::vector<cl::Platform> platforms;
-        cl::Platform::get(&platforms);
-        if (platforms.empty()) return false;
-
-        bool found = false;
-        std::string preferred_lower = preferred_device_vendor;
-        std::transform(preferred_lower.begin(), preferred_lower.end(), preferred_lower.begin(), ::tolower);
-
-        for (const auto &p : platforms) {
-            std::vector<cl::Device> devices;
-            p.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-            for (const auto &d : devices) {
-                std::string dev_vendor = d.getInfo<CL_DEVICE_VENDOR>();
-                std::string dev_name = d.getInfo<CL_DEVICE_NAME>();
-                std::string plat_name = p.getInfo<CL_PLATFORM_NAME>();
-
-                std::string dev_vendor_lower = dev_vendor;
-                std::transform(dev_vendor_lower.begin(), dev_vendor_lower.end(), dev_vendor_lower.begin(), ::tolower);
-
-                if (preferred_lower == "any" || dev_vendor_lower.find(preferred_lower) != std::string::npos) {
-                    pimpl->platform = p;
-                    pimpl->device = d;
-                    selected_platform_name = plat_name;
-                    selected_device_name = dev_name;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        if (!found) {
-            for (const auto &p : platforms) {
-                std::vector<cl::Device> devices;
-                p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-                if (!devices.empty()) {
-                    pimpl->platform = p;
-                    pimpl->device = devices.front();
-                    selected_platform_name = p.getInfo<CL_PLATFORM_NAME>();
-                    selected_device_name = pimpl->device.getInfo<CL_DEVICE_NAME>();
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if (!found) return false;
-
-        pimpl->context = cl::Context(pimpl->device);
-        pimpl->queue = cl::CommandQueue(pimpl->context, pimpl->device);
-
-        std::string kernel_source;
-        const auto kernel_path = get_kernel_path();
-        std::ifstream kf(kernel_path);
-        if (kf) {
-            kernel_source.assign((std::istreambuf_iterator<char>(kf)), std::istreambuf_iterator<char>());
-        } else {
-            kernel_source = EMBEDDED_HPA_KERNELS;
-        }
-
-        cl::Program::Sources sources = {{kernel_source.c_str(), kernel_source.length()}};
-        pimpl->program = cl::Program(pimpl->context, sources);
-
-        if (pimpl->program.build({pimpl->device}, "-cl-std=CL2.0 -cl-fast-relaxed-math") != CL_SUCCESS) {
-            return false;
-        }
-
-        pimpl->kernel_horiz = cl::Kernel(pimpl->program, "hpa_find_horizontal_portals");
-        pimpl->kernel_vert = cl::Kernel(pimpl->program, "hpa_find_vertical_portals");
-        pimpl->ready = true;
-
-        std::cout << "[GpuHierarchicalPathfindingSolver] OpenCL Initialized on "
-                  << selected_device_name << " (" << selected_platform_name << ")\n";
-        return true;
-
-    } catch (const cl::Error &err) {
-        std::cerr << "[GpuHierarchicalPathfindingSolver] OpenCL Exception: " << err.what()
-                  << " (" << err.err() << ")\n";
+    if (!pimpl->gpu.init(this->preferred_device_vendor, "[GpuHierarchicalPathfindingSolver]")) {
         return false;
     }
+    this->selected_platform_name = pimpl->gpu.platform_name;
+    this->selected_device_name = pimpl->gpu.device_name;
+
+    const std::string kernel_source = GpuContext::loadKernelSource("hpa_kernels.cl", EMBEDDED_HPA_KERNELS);
+    pimpl->program = pimpl->gpu.buildProgram(kernel_source, "-cl-std=CL2.0 -cl-fast-relaxed-math", "[GpuHierarchicalPathfindingSolver]");
+    if (!pimpl->gpu.ready) return false;
+
+    pimpl->kernel_horiz = cl::Kernel(pimpl->program, "hpa_find_horizontal_portals");
+    pimpl->kernel_vert = cl::Kernel(pimpl->program, "hpa_find_vertical_portals");
+    return true;
 }
 
 bool GpuHierarchicalPathfindingSolver::solve(const Maze &maze_object) {
@@ -250,17 +162,17 @@ bool GpuHierarchicalPathfindingSolver::solve(const Maze &maze_object) {
     const int max_portals = 2000000;
 
     try {
-        cl::Buffer buf_state(pimpl->context, CL_MEM_READ_ONLY, total_cells * sizeof(int));
-        pimpl->queue.enqueueWriteBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
+        cl::Buffer buf_state(pimpl->gpu.context, CL_MEM_READ_ONLY, total_cells * sizeof(int));
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_state, CL_TRUE, 0, total_cells * sizeof(int), host_state.data());
 
-        cl::Buffer buf_portal_cell_A(pimpl->context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
-        cl::Buffer buf_portal_cell_B(pimpl->context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
-        cl::Buffer buf_portal_tile_A(pimpl->context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
-        cl::Buffer buf_portal_tile_B(pimpl->context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
-        cl::Buffer buf_portal_counter(pimpl->context, CL_MEM_READ_WRITE, sizeof(int));
+        cl::Buffer buf_portal_cell_A(pimpl->gpu.context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
+        cl::Buffer buf_portal_cell_B(pimpl->gpu.context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
+        cl::Buffer buf_portal_tile_A(pimpl->gpu.context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
+        cl::Buffer buf_portal_tile_B(pimpl->gpu.context, CL_MEM_READ_WRITE, max_portals * sizeof(int));
+        cl::Buffer buf_portal_counter(pimpl->gpu.context, CL_MEM_READ_WRITE, sizeof(int));
 
         const int zero = 0;
-        pimpl->queue.enqueueWriteBuffer(buf_portal_counter, CL_TRUE, 0, sizeof(int), &zero);
+        pimpl->gpu.queue.enqueueWriteBuffer(buf_portal_counter, CL_TRUE, 0, sizeof(int), &zero);
 
         // 1. Launch Horizontal Portals Kernel
         pimpl->kernel_horiz.setArg(0, buf_state);
@@ -281,7 +193,7 @@ bool GpuHierarchicalPathfindingSolver::solve(const Maze &maze_object) {
         );
         const cl::NDRange local_tiles(16, 16);
 
-        pimpl->queue.enqueueNDRangeKernel(pimpl->kernel_horiz, cl::NullRange, global_tiles, local_tiles);
+        pimpl->gpu.queue.enqueueNDRangeKernel(pimpl->kernel_horiz, cl::NullRange, global_tiles, local_tiles);
 
         // 2. Launch Vertical Portals Kernel
         pimpl->kernel_vert.setArg(0, buf_state);
@@ -296,10 +208,10 @@ bool GpuHierarchicalPathfindingSolver::solve(const Maze &maze_object) {
         pimpl->kernel_vert.setArg(9, buf_portal_counter);
         pimpl->kernel_vert.setArg(10, max_portals);
 
-        pimpl->queue.enqueueNDRangeKernel(pimpl->kernel_vert, cl::NullRange, global_tiles, local_tiles);
+        pimpl->gpu.queue.enqueueNDRangeKernel(pimpl->kernel_vert, cl::NullRange, global_tiles, local_tiles);
 
         int portal_count = 0;
-        pimpl->queue.enqueueReadBuffer(buf_portal_counter, CL_TRUE, 0, sizeof(int), &portal_count);
+        pimpl->gpu.queue.enqueueReadBuffer(buf_portal_counter, CL_TRUE, 0, sizeof(int), &portal_count);
         portal_count = std::min(portal_count, max_portals);
         total_portals = portal_count;
 
@@ -309,10 +221,10 @@ bool GpuHierarchicalPathfindingSolver::solve(const Maze &maze_object) {
         std::vector<int> p_tile_B(portal_count);
 
         if (portal_count > 0) {
-            pimpl->queue.enqueueReadBuffer(buf_portal_cell_A, CL_FALSE, 0, portal_count * sizeof(int), p_cell_A.data());
-            pimpl->queue.enqueueReadBuffer(buf_portal_cell_B, CL_FALSE, 0, portal_count * sizeof(int), p_cell_B.data());
-            pimpl->queue.enqueueReadBuffer(buf_portal_tile_A, CL_FALSE, 0, portal_count * sizeof(int), p_tile_A.data());
-            pimpl->queue.enqueueReadBuffer(buf_portal_tile_B, CL_TRUE, 0, portal_count * sizeof(int), p_tile_B.data());
+            pimpl->gpu.queue.enqueueReadBuffer(buf_portal_cell_A, CL_FALSE, 0, portal_count * sizeof(int), p_cell_A.data());
+            pimpl->gpu.queue.enqueueReadBuffer(buf_portal_cell_B, CL_FALSE, 0, portal_count * sizeof(int), p_cell_B.data());
+            pimpl->gpu.queue.enqueueReadBuffer(buf_portal_tile_A, CL_FALSE, 0, portal_count * sizeof(int), p_tile_A.data());
+            pimpl->gpu.queue.enqueueReadBuffer(buf_portal_tile_B, CL_TRUE, 0, portal_count * sizeof(int), p_tile_B.data());
         }
 
         std::cout << "[GpuHierarchicalPathfindingSolver] Extracted " << portal_count
