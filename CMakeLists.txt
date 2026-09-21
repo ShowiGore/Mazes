@@ -31,5 +31,10 @@ target_include_directories(Mazes PRIVATE
         ${OpenCL_INCLUDE_DIRS}
 )
 
+find_package(OpenMP)
+
 # Link dependencies
 target_link_libraries(Mazes PRIVATE ${PNG_LIBRARIES} OpenCL::OpenCL)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(Mazes PRIVATE OpenMP::OpenMP_CXX)
+endif()

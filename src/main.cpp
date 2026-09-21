@@ -27,6 +27,8 @@
 #include "solvers/GpuBidirectionalBfsSolver.hpp"
 #include "solvers/GpuBidirectionalGbfsSolver.hpp"
 #include "solvers/GpuHierarchicalPathfindingSolver.hpp"
+#include "solvers/ParallelPruningDfsSolver.hpp"
+#include "solvers/GpuWavefrontPruningSolver.hpp"
 #include "solvers/AStarSolver.hpp"
 #include "solvers/RecursiveSolver.hpp"
 
@@ -79,8 +81,10 @@ void print_help(const char* prog_name) {
               << "                               bidir-gbfs          (Bidirectional Greedy BFS - minimum visited cells)\n"
               << "                               gbfs                (Greedy Best-First Search)\n"
               << "                               dead-end            (Deterministic O(N) Dead-End Filling CPU)\n"
+              << "                               cpu-prune-dfs       (Parallel 64-bit SIMD Pruning + In-Place Tree-DFS CPU)\n"
               << "                               gpu-dead-end        (Parallel Dead-End Filling OpenCL GPU)\n"
               << "                               gpu-bidir-bfs       (Parallel Frontier Expansion Bidirectional BFS GPU)\n"
+              << "                               gpu-wavefront       (Asynchronous Bitpacked Pruning + Wavefront GPU)\n"
               << "                               astar               (A* search)\n"
               << "                               recursive           (Recursive DFS)\n"
               << "                               all                 (Run all solvers and compare)\n"
@@ -279,7 +283,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> active_solvers;
     for (const auto& s : config.solvers) {
         if (s == "all") {
-            active_solvers = {"bidir-gbfs", "gbfs", "dead-end", "gpu-dead-end", "gpu-bidir-bfs", "astar", "recursive"};
+            active_solvers = {"bidir-gbfs", "gbfs", "dead-end", "cpu-prune-dfs", "gpu-dead-end", "gpu-bidir-bfs", "gpu-wavefront", "astar", "recursive"};
             break;
         }
         active_solvers.push_back(s);
@@ -298,6 +302,8 @@ int main(int argc, char* argv[]) {
             solver = std::make_unique<GreedyBestFirstSolver>();
         } else if (solver_name == "dead-end") {
             solver = std::make_unique<DeadEndFillingSolver>();
+        } else if (solver_name == "cpu-prune-dfs" || solver_name == "prune-dfs" || solver_name == "parallel-pruning-dfs") {
+            solver = std::make_unique<ParallelPruningDfsSolver>();
         } else if (solver_name == "gpu-dead-end" || solver_name == "gpu" || solver_name == "opencl") {
             solver = std::make_unique<GpuDeadEndFillingSolver>();
         } else if (solver_name == "gpu-bidir-bfs" || solver_name == "gpu-bfs" || solver_name == "gpu-bidirectional-bfs") {
@@ -306,6 +312,8 @@ int main(int argc, char* argv[]) {
             solver = std::make_unique<GpuBidirectionalGbfsSolver>();
         } else if (solver_name == "gpu-hpa" || solver_name == "gpu-hierarchical" || solver_name == "hpa") {
             solver = std::make_unique<GpuHierarchicalPathfindingSolver>();
+        } else if (solver_name == "gpu-wavefront" || solver_name == "wavefront" || solver_name == "gpu-wavefront-pruning") {
+            solver = std::make_unique<GpuWavefrontPruningSolver>();
         } else if (solver_name == "astar") {
             solver = std::make_unique<AStarSolver>();
         } else if (solver_name == "recursive") {
@@ -337,6 +345,11 @@ int main(int argc, char* argv[]) {
         if (auto* bidir = dynamic_cast<BidirectionalGreedyBestFirstSolver*>(solver.get())) {
             std::cout << "Cells visited:  " << bidir->getVisitedCount() << std::endl;
         }
+        if (auto* prune_dfs = dynamic_cast<ParallelPruningDfsSolver*>(solver.get())) {
+            std::cout << "Prune Passes:   " << prune_dfs->getPrunePasses() << "\n";
+            std::cout << "Dead-ends cut:  " << prune_dfs->getPrunedCount() << "\n";
+            std::cout << "Cells visited:  " << prune_dfs->getVisitedCount() << std::endl;
+        }
         if (auto* gpu_de = dynamic_cast<GpuDeadEndFillingSolver*>(solver.get())) {
             std::cout << "GPU Iterations: " << gpu_de->getIterationCount() << std::endl;
         }
@@ -351,6 +364,12 @@ int main(int argc, char* argv[]) {
         if (auto* gpu_hpa = dynamic_cast<GpuHierarchicalPathfindingSolver*>(solver.get())) {
             std::cout << "Portals:        " << gpu_hpa->getPortalsCount() << "\n";
             std::cout << "Macro Steps:    " << gpu_hpa->getMacroSteps() << std::endl;
+        }
+        if (auto* gpu_wf = dynamic_cast<GpuWavefrontPruningSolver*>(solver.get())) {
+            std::cout << "Prune Passes:   " << gpu_wf->getPrunePasses() << "\n";
+            std::cout << "Dead-ends cut:  " << gpu_wf->getPrunedCount() << "\n";
+            std::cout << "Wavefront Steps:" << gpu_wf->getExpansionsCount() << "\n";
+            std::cout << "Cells visited:  " << gpu_wf->getVisitedCount() << std::endl;
         }
 
         if (solvable) {
